@@ -27,7 +27,9 @@ from .schema import AnalysisResult, json_schema
 
 BLOCKED_NETS = [
     ipaddress.ip_network("169.254.0.0/16"),   # Cloud-Metadaten
-    ipaddress.ip_network("172.30.32.0/23"),   # Home-Assistant-Supervisor-Netz
+    # Supervisor-Infrastruktur (Core .1, Supervisor .2, DNS, Audio, CLI, Observer …).
+    # Das App-Netz 172.30.33.0/24 bleibt erlaubt, damit z. B. die Ollama-App erreichbar ist.
+    ipaddress.ip_network("172.30.32.0/24"),
     ipaddress.ip_network("0.0.0.0/8"),
 ]
 

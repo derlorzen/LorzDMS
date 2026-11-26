@@ -129,3 +129,28 @@ def test_processing_window():
     assert in_window("22:00-06:00", datetime(2026, 1, 1, 23, 0))
     assert not in_window("22:00-06:00", datetime(2026, 1, 1, 12, 0))
     assert in_window("", datetime(2026, 1, 1, 12, 0))
+
+
+def test_provider_url_ssrf_guard(monkeypatch):
+    import ipaddress
+
+    from lorzdms.ai import providers
+
+    table = {
+        "supervisor": "172.30.32.2",
+        "homeassistant": "172.30.32.1",
+        "76e18fb5-ollama": "172.30.33.5",
+        "metadata": "169.254.169.254",
+        "lan": "192.168.1.20",
+        "public": "93.184.216.34",
+    }
+    monkeypatch.setattr(providers, "_resolve", lambda h: [ipaddress.ip_address(table[h])])
+    for host in ("supervisor", "homeassistant", "metadata"):
+        with pytest.raises(providers.ProviderError):
+            providers.check_url(f"http://{host}:11434")
+    # Apps im Supervisor-App-Netz (z. B. Ollama) und LAN sind lokal und erlaubt
+    assert providers.check_url("http://76e18fb5-ollama:11434") is True
+    assert providers.check_url("http://lan:11434") is True
+    with pytest.raises(providers.ProviderError):
+        providers.check_url("http://public/v1")
+    assert providers.check_url("https://public/v1") is False
