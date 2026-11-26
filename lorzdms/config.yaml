@@ -1,6 +1,6 @@
 # https://contributors.home-assistant.io/apps/reference/configuration/
 name: LorzDMS
-version: "0.1.1"
+version: "0.1.2"
 slug: lorzdms
 description: KI-gestütztes Dokumentenmanagement mit Google Drive als Archiv
 url: "https://github.com/derlorzen/LorzDMS/tree/main/lorzdms"

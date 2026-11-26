@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.2 – 2026-11-27
+
+- Einstellungen: Browser-Autofill füllt die KI-Provider-Felder (Modell, API-Key) nicht mehr mit gespeicherten Zugangsdaten
+
 ## 0.1.1 – 2026-11-26
 
 - KI-Provider: Apps im Supervisor-App-Netz (172.30.33.0/24, z. B. die Ollama-App) sind als lokale Provider erreichbar;

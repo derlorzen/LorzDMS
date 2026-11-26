@@ -84,9 +84,9 @@ export default function Settings({ me }: { me: Me }) {
               </select>
             </Field>
             {ai.kind !== "none" && <>
-              <Field label="Basis-URL"><input className="input" placeholder={ai.kind === "ollama" ? "http://192.168.1.10:11434" : ai.kind === "anthropic" ? "https://api.anthropic.com" : "https://api.openai.com/v1"} value={ai.base_url} onChange={(e) => setAi({ ...ai, base_url: e.target.value })} /></Field>
-              <Field label="Modell"><input className="input" value={ai.model} onChange={(e) => setAi({ ...ai, model: e.target.value })} /></Field>
-              <Field label={`API-Key${s.data.ai_provider?.has_key ? " (gespeichert – leer lassen zum Beibehalten)" : ""}`}><input className="input" type="password" autoComplete="off" value={ai.api_key} onChange={(e) => setAi({ ...ai, api_key: e.target.value })} /></Field>
+              <Field label="Basis-URL"><input className="input" name="lorzdms-ai-base-url" autoComplete="off" spellCheck={false} placeholder={ai.kind === "ollama" ? "http://192.168.1.10:11434" : ai.kind === "anthropic" ? "https://api.anthropic.com" : "https://api.openai.com/v1"} value={ai.base_url} onChange={(e) => setAi({ ...ai, base_url: e.target.value })} /></Field>
+              <Field label="Modell"><input className="input" name="lorzdms-ai-model" autoComplete="off" spellCheck={false} value={ai.model} onChange={(e) => setAi({ ...ai, model: e.target.value })} /></Field>
+              <Field label={`API-Key${s.data.ai_provider?.has_key ? " (gespeichert – leer lassen zum Beibehalten)" : ""}`}><input className="input" type="password" name="lorzdms-ai-api-key" autoComplete="new-password" data-1p-ignore data-lpignore="true" value={ai.api_key} onChange={(e) => setAi({ ...ai, api_key: e.target.value })} /></Field>
             </>}
             <p className="text-xs muted">Gemini, Azure OpenAI und weitere Anbieter sind über OpenAI-kompatible Endpunkte nutzbar; eigene Adapter folgen.</p>
           </div>
