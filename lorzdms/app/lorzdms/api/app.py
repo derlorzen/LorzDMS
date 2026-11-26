@@ -273,31 +273,78 @@ def register_routes(app: FastAPI) -> None:
         get_doc_for(user, doc_id)
         return [db.row_to_dict(r, ("data",)) for r in db.query("SELECT * FROM journal WHERE document_id=? ORDER BY id", (doc_id,))]
 
+    def _local_copy(d: dict) -> Path:
+        s = get_settings()
+        local = s.temp_dir / f"doc-{d['id']}" / "original"
+        if local.exists():
+            return local
+        if not d["drive_file_id"] and d["source_kind"] != "drive":
+            raise HTTPException(404, "Datei ist lokal nicht mehr vorhanden")
+        file_id = d["drive_file_id"] or d["source_ref"]
+        account = services.folder_account(d["target_folder_drive_id"]) if d["drive_file_id"] else None
+        if account is None:
+            src = db.one("SELECT account_id FROM sources WHERE id=?", (d["source_id"],))
+            account = src["account_id"] if src else None
+        if account is None:
+            raise HTTPException(404, "Kein Google-Konto für die Vorschau")
+        cache = s.cache_dir / "preview"
+        cache.mkdir(parents=True, exist_ok=True)
+        local = cache / f"doc-{d['id']}"
+        if not local.exists():
+            services.drive(account).download(file_id, local, s.max_file_size_mb * 1024 * 1024)
+        return local
+
     @app.get("/api/documents/{doc_id}/file")
     def get_file(doc_id: int, user: User = Depends(viewer), download: bool = False):
         d = get_doc_for(user, doc_id)
-        s = get_settings()
-        local = s.temp_dir / f"doc-{doc_id}" / "original"
-        if not local.exists():
-            if not d["drive_file_id"] and d["source_kind"] != "drive":
-                raise HTTPException(404, "Datei ist lokal nicht mehr vorhanden")
-            file_id = d["drive_file_id"] or d["source_ref"]
-            account = services.folder_account(d["target_folder_drive_id"]) if d["drive_file_id"] else None
-            if account is None:
-                src = db.one("SELECT account_id FROM sources WHERE id=?", (d["source_id"],))
-                account = src["account_id"] if src else None
-            if account is None:
-                raise HTTPException(404, "Kein Google-Konto für die Vorschau")
-            cache = s.cache_dir / "preview"
-            cache.mkdir(parents=True, exist_ok=True)
-            local = cache / f"doc-{doc_id}"
-            if not local.exists():
-                services.drive(account).download(file_id, local, s.max_file_size_mb * 1024 * 1024)
+        local = _local_copy(d)
         name = d["target_name"] or d["original_filename"]
         resp = FileResponse(local, media_type=d["mime_type"] or "application/octet-stream")
         disp = "attachment" if download else "inline"
         resp.headers["Content-Disposition"] = f"{disp}; filename*=UTF-8''{_quote(name)}"
-        resp.headers["Content-Security-Policy"] = "sandbox; default-src 'none'; object-src 'self'; frame-ancestors 'self'"
+        # Kein Skript, keine Fremdressourcen; "sandbox" nur für Nicht-PDFs (sonst blockiert
+        # der Browser seinen eingebauten PDF-Betrachter).
+        csp = "default-src 'none'; img-src 'self'; style-src 'unsafe-inline'; frame-ancestors 'self'"
+        if d["mime_type"] != "application/pdf":
+            csp = "sandbox; " + csp
+        resp.headers["Content-Security-Policy"] = csp
+        return resp
+
+    @app.get("/api/documents/{doc_id}/pages/{page}.png")
+    def get_page(doc_id: int, page: int, user: User = Depends(viewer), width: int = Query(default=1200, ge=200, le=2400)):
+        """Seitenvorschau als PNG (funktioniert auch in der Companion App ohne PDF-Betrachter)."""
+        d = get_doc_for(user, doc_id)
+        s = get_settings()
+        out = s.cache_dir / "pages" / f"doc-{doc_id}-p{page}-w{width}.png"
+        if not out.exists():
+            local = _local_copy(d)
+            out.parent.mkdir(parents=True, exist_ok=True)
+            if d["mime_type"] == "application/pdf":
+                import pypdfium2 as pdfium
+
+                pdf = pdfium.PdfDocument(str(local))
+                try:
+                    if not 1 <= page <= len(pdf):
+                        raise HTTPException(404, "Seite existiert nicht")
+                    pg = pdf[page - 1]
+                    scale = width / pg.get_width()
+                    pg.render(scale=min(scale, 4.0)).to_pil().save(out, "PNG", optimize=True)
+                    pg.close()
+                finally:
+                    pdf.close()
+            elif (d["mime_type"] or "").startswith("image/"):
+                if page != 1:
+                    raise HTTPException(404, "Seite existiert nicht")
+                from PIL import Image
+
+                Image.MAX_IMAGE_PIXELS = s.max_image_pixels
+                with Image.open(local) as im:
+                    im.thumbnail((width, width * 2))
+                    im.convert("RGB").save(out, "PNG", optimize=True)
+            else:
+                raise HTTPException(415, "Keine Vorschau für diesen Dateityp")
+        resp = FileResponse(out, media_type="image/png")
+        resp.headers["Cache-Control"] = "private, max-age=3600"
         return resp
 
     @app.post("/api/documents/upload")
@@ -658,8 +705,7 @@ def register_routes(app: FastAPI) -> None:
     @app.post("/api/jobs/retry-dead")
     def retry_dead(user: User = Depends(admin)):
         n = jobqueue.retry_dead()
-        for r in db.query("SELECT id FROM documents WHERE state='failed'"):
-            pass
+        db.audit("jobs.retry_dead", user.id, None, count=n)
         return {"requeued": n}
 
     @app.get("/api/users")

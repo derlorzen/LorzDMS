@@ -1,0 +1,7 @@
+#!/command/with-contenv bashio
+# ==============================================================================
+# LorzDMS Hintergrund-Worker (OCR, Synchronisierung, Scheduler)
+# ==============================================================================
+bashio::log.info "Starte LorzDMS-Worker"
+cd /opt/lorzdms || exit 1
+exec nice -n 10 /opt/venv/bin/python3 -m lorzdms.worker

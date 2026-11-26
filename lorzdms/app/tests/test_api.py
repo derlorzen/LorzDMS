@@ -101,3 +101,14 @@ def test_google_client_upload_validation(client):
     assert r.status_code == 200 and r.json()["client_type"] == "installed"
     st = client.get("/api/google/status", headers=H1).json()
     assert "client_secret" not in str(st)
+
+
+def test_page_preview_png(client):
+    client.get("/api/me", headers=H1)
+    pdf = synth.text_pdf(synth.DOCS["rechnung"])
+    doc_id = client.post("/api/documents/upload", files=[("files", ("r.pdf", pdf, "application/pdf"))], headers=H1).json()["results"][0]["document_id"]
+    from tests.conftest import drain
+    drain()
+    r = client.get(f"/api/documents/{doc_id}/pages/1.png?width=400", headers=H1)
+    assert r.status_code == 200 and r.content.startswith(b"\x89PNG")
+    assert client.get(f"/api/documents/{doc_id}/pages/5.png", headers=H1).status_code == 404

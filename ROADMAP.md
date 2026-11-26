@@ -11,18 +11,22 @@ Die Phasen folgen dem Auftrag; die Home-Assistant-App hat Vorrang vor Coolify.
 - ✅ SQLite WAL, Migrationen, FTS5
 - ✅ Persistente Job-Queue mit Retry, Lease und Dead-Letter
 - ✅ Ingress-Authentifizierung mit Supervisor-Prüfung, Rollen
-- 🟡 Weboberfläche (Dashboard, Dokumente, Prüfung, Einrichtung) – weitere Ansichten folgen
-- 🟡 Setup-Assistent (Administrator, Google-Client, Ordner, Aktivierung)
+- ✅ Weboberfläche über Ingress (Übersicht, Prüfung, Dokumente, Quellen, Ordner, Regeln, Einstellungen); Englisch nur teilweise übersetzt
+- ✅ Setup-Assistent (Administrator, Systemprüfung, Google, Ordner, Quellen, KI, Regeln, Testlauf, Aktivierung)
+- 🟡 Container-Build für amd64/aarch64 (CI baut das Image; Installation auf echter HAOS-Instanz noch nicht getestet)
+- ⬜ Vorgefertigte Images in GHCR (derzeit baut der Supervisor lokal)
 
 ## Phase 2 – Dokumentenimport
 - ✅ Lokaler Eingang `/share/lorzdms/inbox`
 - ✅ Manueller Upload (Weboberfläche, REST)
 - ✅ Google Drive Eingangsordner (REST-Client, gegen Mock getestet)
 - ✅ Gmail lesend (History-API + Suche, Anhangsfilter, gegen Mock getestet)
+- ⬜ OCR-Konfidenzwert, PDF/A-Ausgabe in der Oberfläche, Ablage von OCR-Derivaten zusätzlich zum Original
 - ✅ Textextraktion (pypdfium2), OCR (OCRmyPDF/Tesseract, lokal)
 - ✅ SHA-256, Duplikate (Hash, Gmail-Message-/Attachment-ID, Drive-ID)
 - ✅ Verarbeitungsjournal und Zustandsmaschine
-- ⬜ Drive Push-Benachrichtigungen (Polling über Changes-API ist umgesetzt)
+- ⬜ Drive Changes-API und Push-Benachrichtigungen (derzeit Polling per Ordnerauflistung)
+- ⬜ IMAP, WebDAV
 - ⬜ Gmail Pub/Sub (Polling über History-API ist umgesetzt)
 - ⬜ HEIC, DOCX, XLSX, EML, ZUGFeRD/XRechnung
 

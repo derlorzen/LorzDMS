@@ -1,0 +1,28 @@
+configuration:
+  log_level:
+    name: Log level
+    description: Log verbosity (document contents are never logged).
+  ocr_languages:
+    name: OCR languages
+    description: Tesseract languages, e.g. deu+eng.
+  ocr_timeout_seconds:
+    name: OCR timeout (seconds)
+    description: Maximum OCR duration per document.
+  max_file_size_mb:
+    name: Maximum file size (MB)
+    description: Larger files are rejected.
+  min_free_disk_mb:
+    name: Minimum free disk space (MB)
+    description: Processing pauses automatically below this value.
+  max_load_per_cpu:
+    name: Maximum system load per CPU
+    description: Documents are deferred under higher load so Home Assistant stays responsive.
+  processing_window:
+    name: Time window for bulk imports
+    description: Optional, e.g. 22:00-06:00. New single documents are always processed immediately.
+  local_inbox_enabled:
+    name: Local inbox folder
+    description: Watches /share/lorzdms/inbox (e.g. for scanners or Samba).
+  oauth_redirect_uri:
+    name: Google OAuth redirect URI
+    description: Defaults to a loopback address; see documentation.

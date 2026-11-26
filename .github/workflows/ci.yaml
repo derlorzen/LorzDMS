@@ -1,0 +1,70 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  backend:
+    name: Backend-Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: OCR-Werkzeuge installieren
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends tesseract-ocr tesseract-ocr-deu tesseract-ocr-eng ghostscript fonts-dejavu-core
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Abhängigkeiten
+        working-directory: lorzdms/app
+        run: pip install -r requirements-dev.txt
+      - name: Tests
+        working-directory: lorzdms/app
+        run: pytest -q
+
+  frontend:
+    name: Frontend-Build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Build
+        working-directory: lorzdms/frontend
+        run: npm ci && npm run build
+      - name: Gebaute Oberfläche ist eingecheckt
+        run: git diff --exit-code -- lorzdms/app/lorzdms/static || (echo "Bitte 'npm run build' ausführen und lorzdms/app/lorzdms/static committen" && exit 1)
+
+  image:
+    name: App-Image ${{ matrix.platform }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        platform: [linux/amd64, linux/arm64]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-qemu-action@v3
+      - uses: docker/setup-buildx-action@v3
+      - name: Image bauen (wie der Supervisor)
+        run: |
+          docker buildx build --platform ${{ matrix.platform }} --load \
+            --build-arg BUILD_FROM=ghcr.io/home-assistant/base:3.23 \
+            -t lorzdms-test lorzdms
+      - name: Smoke-Test im Image
+        run: |
+          docker run --rm --platform ${{ matrix.platform }} --entrypoint /bin/sh lorzdms-test -c '
+            set -e
+            ocrmypdf --version
+            tesseract --list-langs | grep -q deu
+            cd /opt/lorzdms && python3 -c "import lorzdms.api.app, lorzdms.worker, pypdfium2, cryptography; print(\"imports ok\")"
+            mkdir -p /tmp/d && LORZDMS_DATA_DIR=/tmp/d LORZDMS_LOCAL_INBOX_ENABLED=false python3 -m lorzdms.maintenance init
+            LORZDMS_DATA_DIR=/tmp/d python3 -m lorzdms.maintenance backup-pre
+            test -f /tmp/d/database/snapshot.sqlite3
+            test -f /opt/lorzdms/lorzdms/static/index.html
+          '

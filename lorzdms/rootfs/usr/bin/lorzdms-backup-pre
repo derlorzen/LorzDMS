@@ -1,0 +1,5 @@
+#!/bin/sh
+# Wird vom Supervisor vor einem Backup im laufenden Container ausgeführt.
+# Schreibt einen konsistenten SQLite-Snapshot nach /data/database/snapshot.sqlite3.
+cd /opt/lorzdms || exit 1
+exec /opt/venv/bin/python3 -m lorzdms.maintenance backup-pre

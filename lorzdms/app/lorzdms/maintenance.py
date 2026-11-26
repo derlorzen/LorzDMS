@@ -1,6 +1,7 @@
 """Kommandozeilenwerkzeuge: ``python -m lorzdms.maintenance <befehl>``.
 
 - ``backup-pre``: konsistenten Datenbank-Snapshot für das HA-Backup schreiben
+- ``init``: Start-Initialisierung (Wiederherstellung aus Snapshot, Migrationen)
 - ``check``: Integritätsprüfung
 """
 
@@ -15,6 +16,12 @@ from .config import get_settings
 def main(argv: list[str]) -> int:
     s = get_settings()
     cmd = argv[0] if argv else "check"
+    if cmd == "init":
+        from . import bootstrap
+
+        bootstrap.init(role="web")
+        print("Initialisierung abgeschlossen")
+        return 0
     if cmd == "backup-pre":
         db.configure(s.db_path)
         db.execute("PRAGMA wal_checkpoint(TRUNCATE)")

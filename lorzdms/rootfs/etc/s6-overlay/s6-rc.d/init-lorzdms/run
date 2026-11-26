@@ -1,0 +1,11 @@
+#!/command/with-contenv bashio
+# ==============================================================================
+# LorzDMS: Verzeichnisse anlegen, Datenbank prüfen/wiederherstellen, migrieren
+# ==============================================================================
+bashio::log.info "LorzDMS wird initialisiert …"
+mkdir -p /data/database /data/secrets /data/temp /data/cache /data/quarantine
+chmod 700 /data/secrets
+if bashio::config.true 'local_inbox_enabled'; then
+    mkdir -p /share/lorzdms/inbox /share/lorzdms/processed
+fi
+exec /opt/venv/bin/python3 -m lorzdms.maintenance init

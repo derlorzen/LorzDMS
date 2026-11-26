@@ -4,7 +4,6 @@ __pycache__/
 .venv/
 venv/
 node_modules/
-lorzdms/app/lorzdms/static/
 .env
 *.sqlite3*
 /data/

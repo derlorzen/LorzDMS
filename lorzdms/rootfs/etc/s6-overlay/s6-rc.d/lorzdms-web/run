@@ -1,0 +1,9 @@
+#!/command/with-contenv bashio
+# ==============================================================================
+# LorzDMS Weboberfläche + API (nur über Ingress erreichbar)
+# ==============================================================================
+bashio::log.info "Starte LorzDMS-Weboberfläche auf Port 8099 (Ingress)"
+cd /opt/lorzdms || exit 1
+exec /opt/venv/bin/python3 -m uvicorn --factory lorzdms.api.app:app_factory \
+    --host 0.0.0.0 --port 8099 --no-proxy-headers --no-server-header \
+    --log-level warning --timeout-graceful-shutdown 20
