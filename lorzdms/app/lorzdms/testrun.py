@@ -17,6 +17,7 @@ from . import appsettings, db, services
 from .config import get_settings
 from .google import http as ghttp
 from .pipeline import naming, rules, text as textmod
+from .pipeline.processor import extract_document_text
 
 
 def run_test() -> dict:
@@ -32,13 +33,14 @@ def run_test() -> dict:
         src = work / "sample.pdf"
         with resources.as_file(sample) as p:
             shutil.copy(p, src)
+        ocr_name = "OCR (NVIDIA Nemotron v2)" if (appsettings.get("ocr_provider") or {}).get("kind") == "nvidia_nemotron_ocr_v2" else "OCR (lokal)"
         try:
-            res = textmod.extract(src, "application/pdf", work, languages=s.ocr_languages, timeout=min(s.ocr_timeout_seconds, 300))
+            res = extract_document_text(src, "application/pdf", work, timeout=min(s.ocr_timeout_seconds, 300))
             found = "TEST-0001" in res.text.replace(" ", "")
-            add("OCR (lokal)", res.ocr_used and found, f"{res.method}, {res.ocr_seconds or 0:.1f}s" + ("" if found else ", Testtext nicht erkannt"))
+            add(ocr_name, res.ocr_used and found, f"{res.method}, {res.ocr_seconds or 0:.1f}s" + ("" if found else ", Testtext nicht erkannt"))
             text = res.text
         except (textmod.OcrFailed, textmod.OcrUnavailable) as exc:
-            add("OCR (lokal)", False, str(exc))
+            add(ocr_name, False, str(exc))
             text = ""
     ctx = rules.build_context({"original_filename": "testbrief-scan.pdf", "source_kind": "upload"}, text)
     try:

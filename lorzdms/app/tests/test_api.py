@@ -112,3 +112,21 @@ def test_page_preview_png(client):
     r = client.get(f"/api/documents/{doc_id}/pages/1.png?width=400", headers=H1)
     assert r.status_code == 200 and r.content.startswith(b"\x89PNG")
     assert client.get(f"/api/documents/{doc_id}/pages/5.png", headers=H1).status_code == 404
+
+
+def test_nvidia_ocr_provider_settings(client):
+    from lorzdms import crypto
+    client.get("/api/me", headers=H1)
+    body = {"kind": "nvidia_nemotron_ocr_v2", "allow_external_ocr": False}
+    assert client.put("/api/settings/ocr-provider", json=body, headers=H1).status_code == 400
+    assert client.put("/api/settings/ocr-provider", json={**body, "api_key": "test-key"}, headers=H1).status_code == 200
+    assert client.put("/api/settings/ocr-provider", json={**body, "allow_external_ocr": True}, headers=H1).status_code == 200
+    state = client.get("/api/settings", headers=H1).json()
+    assert state["ocr_provider"]["variant"] == "multilingual"
+    assert state["allow_external_ocr"] is True
+    assert state["ocr_provider"]["has_key"] is True
+    assert "test-key" not in str(state)
+    assert crypto.get_secret("ocr_api_key") == "test-key"
+    assert crypto.get_secret("ai_api_key") is None
+    assert client.put("/api/settings/ocr-provider", json={"kind": "local"}, headers=H1).status_code == 200
+    assert crypto.get_secret("ocr_api_key") is None

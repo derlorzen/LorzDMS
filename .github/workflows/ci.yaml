@@ -3,7 +3,7 @@ name: CI
 on:
   pull_request:
   push:
-    branches: [main]
+    branches: [main, feature/phase-1-grundlage]
 
 permissions:
   contents: read
@@ -37,8 +37,8 @@ jobs:
       - name: Build
         working-directory: lorzdms/frontend
         run: npm ci && npm run build
-      - name: Gebaute Oberfläche ist eingecheckt
-        run: git diff --exit-code -- lorzdms/app/lorzdms/static || (echo "Bitte 'npm run build' ausführen und lorzdms/app/lorzdms/static committen" && exit 1)
+      - name: Frontend-Artefakt prüfen
+        run: test -s lorzdms/app/lorzdms/static/index.html
 
   image:
     name: App-Image ${{ matrix.platform }}

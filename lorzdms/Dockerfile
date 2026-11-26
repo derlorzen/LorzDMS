@@ -1,5 +1,12 @@
 # https://contributors.home-assistant.io/apps/guides/dockerfile/
 ARG BUILD_FROM=ghcr.io/home-assistant/base:3.23
+FROM node:22-alpine AS frontend
+WORKDIR /build/frontend
+COPY frontend/package.json frontend/package-lock.json ./
+RUN npm ci
+COPY frontend/ ./
+RUN npm run build
+
 FROM ${BUILD_FROM}
 
 # Systempakete: Python, Tesseract (Deutsch/Englisch), Ghostscript (PDF/A), Hilfsprogramme
@@ -20,8 +27,10 @@ COPY app/requirements.txt /opt/lorzdms/requirements.txt
 RUN /opt/venv/bin/pip install --no-cache-dir --only-binary=:all: -r /opt/lorzdms/requirements.txt \
     && /opt/venv/bin/ocrmypdf --version
 
-# Anwendung (inkl. vorab gebauter Weboberfläche in lorzdms/static)
+# Anwendung und frisch aus dem Frontend-Quellcode gebaute Oberfläche
 COPY app/lorzdms /opt/lorzdms/lorzdms
+RUN rm -rf /opt/lorzdms/lorzdms/static
+COPY --from=frontend /build/app/lorzdms/static /opt/lorzdms/lorzdms/static
 COPY rootfs /
 
 ENV PATH="/opt/venv/bin:${PATH}" \

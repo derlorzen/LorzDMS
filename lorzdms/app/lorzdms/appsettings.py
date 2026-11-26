@@ -17,6 +17,8 @@ DEFAULTS: dict[str, Any] = {
     # anhand realer Ergebnisse kalibriert wurden (Standard: immer Bestätigung).
     "ai_confidence_cap": 0.94,
     "allow_external_ai": False,
+    "ocr_provider": None,  # local (default) or nvidia_nemotron_ocr_v2
+    "allow_external_ocr": False,
     "ai_provider": None,  # {"kind","base_url","model","has_key"}
     "filename_template": "{document_date}_{sender}_{document_type}_{reference}",
     "original_strategy": "original_only",  # original_only | original_plus_derivative | derivative_only

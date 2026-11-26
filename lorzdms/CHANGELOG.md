@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.6 – 2026-11-27
+
+- Eigene OCR-Einstellung für NVIDIA Nemotron OCR v2 (multilingual) mit separatem verschlüsseltem API-Key und ausdrücklicher Freigabe der Bildübertragung.
+- PDF-Seiten werden bei Bedarf einzeln gerendert, Bilder direkt verarbeitet; eingebetteter Text bleibt erhalten. Kein Chat-Completions-Aufruf, kein OCR-PDF-Derivat.
+- Die Oberfläche wird im App-Image aus dem Frontend-Quellcode gebaut.
+
 ## 0.1.5 – 2026-11-27
 
 - „Erneut versuchen“ verarbeitet alle Dokumente im Zustand „Fehler“ neu, auch wenn ihr Job bereits regulär beendet ist

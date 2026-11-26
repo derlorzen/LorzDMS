@@ -6,6 +6,7 @@ import { ErrorBox, Field, Notice, Section, useAction, useApi } from "../ui";
 type S = {
   processing_mode: string; auto_threshold: number; suggest_threshold: number; ai_confidence_cap: number; allow_external_ai: boolean;
   ai_provider: { kind: string; base_url?: string; model?: string; has_key?: boolean; external?: boolean } | null;
+  ocr_provider: { kind: string; has_key?: boolean } | null; allow_external_ocr: boolean;
   filename_template: string; original_strategy: string; review_sensitive: boolean; test_run_ok: boolean;
   runtime: Record<string, string | number>;
 };
@@ -17,11 +18,13 @@ export default function Settings({ me }: { me: Me }) {
   const jobs = useApi<{ stats: { by_state: Record<string, number> }; items: { id: number; kind: string; state: string; attempts: number; last_error: string | null }[] }>("jobs?state=dead");
   const [form, setForm] = useState<Partial<S>>({});
   const [ai, setAi] = useState({ kind: "none", base_url: "", model: "", api_key: "" });
+  const [ocr, setOcr] = useState({ kind: "local", api_key: "", allow_external_ocr: false });
   const act = useAction();
   const [saved, setSaved] = useState<string | null>(null);
   useEffect(() => {
     if (!s.data) return;
     setForm(s.data);
+    setOcr({ kind: s.data.ocr_provider?.kind ?? "local", api_key: "", allow_external_ocr: !!s.data.allow_external_ocr });
     const p = s.data.ai_provider;
     setAi({ kind: p?.kind ?? "none", base_url: p?.base_url ?? "", model: p?.model ?? "", api_key: "" });
   }, [s.data]);
@@ -37,6 +40,11 @@ export default function Settings({ me }: { me: Me }) {
   const saveAi = () => act.run(async () => {
     const r = await api.send<{ external: boolean; allowed: boolean }>("PUT", "settings/ai-provider", { ...ai, api_key: ai.api_key || null });
     setSaved(r.external && !r.allowed ? "Gespeichert – externer Provider wird erst nach Freigabe genutzt" : "KI-Provider gespeichert");
+    s.reload();
+  });
+  const saveOcr = () => act.run(async () => {
+    await api.send("PUT", "settings/ocr-provider", { ...ocr, api_key: ocr.api_key || null });
+    setSaved("OCR-Provider gespeichert");
     s.reload();
   });
   return (
@@ -71,6 +79,25 @@ export default function Settings({ me }: { me: Me }) {
             </Field>
             <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={!!form.review_sensitive} onChange={(e) => setForm({ ...form, review_sensitive: e.target.checked })} /> Hochsensible Dokumente immer prüfen</label>
             <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={!!form.allow_external_ai} onChange={(e) => setForm({ ...form, allow_external_ai: e.target.checked })} /> Externe KI-Provider erlauben (Dokumenttext verlässt das Netzwerk)</label>
+          </div>
+        </Section>
+        <Section title="OCR – Texterkennung" actions={<button className="btn btn-primary" onClick={saveOcr} disabled={act.busy}>{t("save")}</button>}>
+          <div className="space-y-3">
+            <Field label="Typ">
+              <select className="input" value={ocr.kind} onChange={(e) => setOcr({ ...ocr, kind: e.target.value, allow_external_ocr: false, api_key: "" })}>
+                <option value="local">Lokal – OCRmyPDF / Tesseract</option>
+                <option value="nvidia_nemotron_ocr_v2">NVIDIA Nemotron OCR v2 (multilingual)</option>
+              </select>
+            </Field>
+            {ocr.kind === "nvidia_nemotron_ocr_v2" && <>
+              <Field label="POST-Endpunkt"><input className="input" readOnly value="https://ai.api.nvidia.com/v1/cv/nvidia/nemotron-ocr-v2" /></Field>
+              <Field label="Modell"><input className="input" readOnly value="nvidia/nemotron-ocr-v2" /></Field>
+              <Field label={`API-Key${s.data.ocr_provider?.has_key ? " (gespeichert – leer lassen zum Beibehalten)" : ""}`}>
+                <input className="input" type="password" name="lorzdms-nvidia-ocr-key" autoComplete="new-password" data-1p-ignore data-lpignore="true" value={ocr.api_key} onChange={(e) => setOcr({ ...ocr, api_key: e.target.value })} />
+              </Field>
+              <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={ocr.allow_external_ocr} onChange={(e) => setOcr({ ...ocr, allow_external_ocr: e.target.checked })} /> Externe OCR erlauben (gescannte Seitenbilder werden an NVIDIA übertragen)</label>
+              <p className="text-xs muted">Multilinguales Standardmodell, keine Englisch-Beschränkung im Request. Deutsch ist in der NVIDIA Model Card nicht ausdrücklich zugesichert. Das Original bleibt unverändert; NVIDIA erzeugt kein durchsuchbares PDF-Derivat. Die KI-Sortierung wird separat konfiguriert.</p>
+            </>}
           </div>
         </Section>
         <Section title="KI-Provider" actions={<button className="btn btn-primary" onClick={saveAi} disabled={act.busy}>{t("save")}</button>}>

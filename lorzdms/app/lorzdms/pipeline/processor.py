@@ -26,7 +26,7 @@ from .. import appsettings, db, services
 from ..ai import providers as ai_providers
 from ..config import get_settings
 from ..crypto import get_secret
-from . import filetypes, naming, rules, states, text as textmod
+from . import filetypes, naming, rules, states, nvidia_ocr, text as textmod
 
 log = logging.getLogger("lorzdms.pipeline")
 
@@ -179,14 +179,27 @@ def step_validate(doc: dict) -> None:
     set_state(doc, states.VALIDATED)
 
 
+def extract_document_text(path: Path, mime: str, work: Path, *, timeout: int, force_ocr: bool = False) -> textmod.TextResult:
+    provider = appsettings.get("ocr_provider") or {}
+    if provider.get("kind") == "nvidia_nemotron_ocr_v2":
+        result = nvidia_ocr.extract(path, mime, timeout=timeout, force_ocr=force_ocr)
+        # Prevent reuse of a stale derivative from an earlier local OCR attempt.
+        (work / "ocr.pdf").unlink(missing_ok=True)
+        if appsettings.get("original_strategy") == "derivative_only":
+            result.warnings.append("NVIDIA OCR erzeugt kein OCR-PDF; Original wird abgelegt")
+        return result
+    return textmod.extract(path, mime, work, languages=get_settings().ocr_languages,
+                           timeout=timeout, force_ocr=force_ocr)
+
+
 def step_extract(doc: dict, force_ocr: bool = False) -> None:
     s = get_settings()
     path = original_path(doc["id"])
     if not path.exists():
         raise RuntimeError("Arbeitskopie fehlt – erneuter Abruf nötig")
-    res = textmod.extract(
+    res = extract_document_text(
         path, doc["mime_type"], workdir(doc["id"]),
-        languages=s.ocr_languages, timeout=s.ocr_timeout_seconds, force_ocr=force_ocr,
+        timeout=s.ocr_timeout_seconds, force_ocr=force_ocr,
     )
     text_hash = hashlib.sha256(" ".join(res.text.split()).lower().encode()).hexdigest() if res.text.strip() else None
     db.execute(

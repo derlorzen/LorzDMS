@@ -24,7 +24,7 @@ from ..config import get_settings
 from ..google import http as ghttp
 from ..google import oauth
 from ..google.drive import FOLDER_MIME
-from ..pipeline import naming, rules, states
+from ..pipeline import naming, rules, states, nvidia_ocr
 from ..pipeline.processor import load
 from ..pipeline.text import ocr_available
 from ..sources import intake
@@ -114,6 +114,12 @@ class AiProviderBody(BaseModel):
     base_url: str = ""
     model: str = ""
     api_key: str | None = None
+
+
+class OcrProviderBody(BaseModel):
+    kind: str = Field(pattern="^(local|nvidia_nemotron_ocr_v2)$")
+    api_key: str | None = None
+    allow_external_ocr: bool = False
 
 
 # Hilfen -----------------------------------------------------------------------
@@ -670,6 +676,27 @@ def register_routes(app: FastAPI) -> None:
             appsettings.set(k, v)
             db.audit("settings.change", user.id, k, value=v if k != "allow_external_ai" else bool(v))
         return appsettings.all_settings()
+
+    @app.put("/api/settings/ocr-provider")
+    def set_ocr(body: OcrProviderBody, user: User = Depends(admin)):
+        if body.kind == "local":
+            appsettings.set("allow_external_ocr", False)
+            appsettings.set("ocr_provider", {"kind": "local"})
+            crypto.delete_secret("ocr_api_key")
+        else:
+            if body.api_key and body.api_key.strip():
+                crypto.put_secret("ocr_api_key", body.api_key.strip())
+            has_key = bool(crypto.get_secret("ocr_api_key"))
+            if not has_key:
+                raise HTTPException(400, "NVIDIA OCR: API-Key fehlt")
+            appsettings.set("ocr_provider", {
+                "kind": body.kind, "endpoint": nvidia_ocr.ENDPOINT,
+                "model": nvidia_ocr.MODEL, "variant": nvidia_ocr.VARIANT, "has_key": has_key,
+            })
+            appsettings.set("allow_external_ocr", body.allow_external_ocr)
+        db.audit("ocr.provider_set", user.id, body.kind, external_allowed=body.kind != "local" and body.allow_external_ocr)
+        return {"ok": True}
+
 
     @app.put("/api/settings/ai-provider")
     def set_ai(body: AiProviderBody, user: User = Depends(admin)):
