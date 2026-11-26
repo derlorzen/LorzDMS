@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.5 – 2026-11-27
+
+- „Erneut versuchen“ verarbeitet alle Dokumente im Zustand „Fehler“ neu, auch wenn ihr Job bereits regulär beendet ist
+
 ## 0.1.4 – 2026-11-27
 
 - „Erneut versuchen“ setzt endgültig fehlgeschlagene Dokumente auf den passenden Schritt zurück und verarbeitet sie

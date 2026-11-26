@@ -89,23 +89,19 @@ def _resume_state(doc: dict, *, force_ocr: bool = False) -> str:
 
 
 def retry_failed_jobs(user_id: int | None) -> int:
-    """Endgültig fehlgeschlagene Jobs neu einreihen; zugehörige Dokumente im Zustand
-    'failed' werden auf den passenden Wiederaufnahme-Zustand zurückgesetzt."""
-    for job in db.query("SELECT payload FROM jobs WHERE state='dead' AND kind='process_document'"):
-        try:
-            doc_id = int(json.loads(job["payload"])["document_id"])
-            doc = load(doc_id)
-        except Exception:  # noqa: BLE001 - defekte/verwaiste Jobs einfach erneut versuchen
-            continue
-        if doc["state"] != states.FAILED:
-            continue
+    """Endgültig fehlgeschlagene Jobs neu einreihen und alle Dokumente im Zustand 'failed'
+    ab dem passenden Schritt erneut verarbeiten. Rückgabe: Anzahl neu eingereihter Arbeiten."""
+    n = jobqueue.retry_dead()
+    for row in db.query("SELECT id FROM documents WHERE state=?", (states.FAILED,)):
+        doc = load(row["id"])
         try:
             target = _resume_state(doc)
         except ActionError:
             continue
-        db.execute("UPDATE documents SET state=?, state_changed_at=?, error=NULL WHERE id=?", (target, db.utcnow(), doc_id))
-        journal(doc_id, "retry", "info", "Erneuter Versuch nach endgültigem Fehler", user=user_id)
-    n = jobqueue.retry_dead()
+        db.execute("UPDATE documents SET state=?, state_changed_at=?, error=NULL WHERE id=?", (target, db.utcnow(), doc["id"]))
+        journal(doc["id"], "retry", "info", "Erneuter Versuch nach endgültigem Fehler", user=user_id)
+        if jobqueue.enqueue("process_document", {"document_id": doc["id"]}, priority=50, dedupe_key=f"doc:{doc['id']}") is not None:
+            n += 1
     db.audit("jobs.retry_dead", user_id, None, count=n)
     return n
 

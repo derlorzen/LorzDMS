@@ -313,4 +313,13 @@ def test_retry_failed_ocr_reprocesses_document(fake, tree, account, monkeypatch)
     drain()
     d = doc(doc_id)
     assert d["state"] == states.OBSERVED and d["error"] is None
+
+    # Auch ohne toten Job (Job endete regulär mit Zustand 'failed') wird neu verarbeitet
+    db.execute("UPDATE documents SET state=? WHERE id=?", (states.FAILED, doc_id))
+    db.execute("DELETE FROM document_text WHERE document_id=?", (doc_id,))
+    db.execute("DELETE FROM jobs")
+    assert actions.retry_failed_jobs(None) == 1
+    drain()
+    d = doc(doc_id)
+    assert d["state"] == states.OBSERVED and d["error"] is None
     assert "Musterhosting" in db.one("SELECT text FROM document_text WHERE document_id=?", (doc_id,))[0]
