@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.3 – 2026-11-27
+
+- OCR: Tesseract-Daten für die Seitenausrichtung (osd) fehlten im Image, dadurch schlug die OCR für Scans fehl.
+  Paket ergänzt; ohne osd wird die automatische Drehung übersprungen statt abzubrechen
+- CI: Smoke-Test führt jetzt eine echte OCR im Image aus
+
 ## 0.1.2 – 2026-11-27
 
 - Einstellungen: Browser-Autofill füllt die KI-Provider-Felder (Modell, API-Key) nicht mehr mit gespeicherten Zugangsdaten

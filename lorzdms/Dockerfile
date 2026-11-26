@@ -9,6 +9,7 @@ RUN apk add --no-cache \
         tesseract-ocr \
         tesseract-ocr-data-deu \
         tesseract-ocr-data-eng \
+        tesseract-ocr-data-osd \
         ghostscript \
         pngquant \
         unpaper \

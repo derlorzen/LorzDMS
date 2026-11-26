@@ -6,6 +6,7 @@ Original wird nie verändert; OCRmyPDF schreibt ein Derivat in das Arbeitsverzei
 
 from __future__ import annotations
 
+import functools
 import os
 import shutil
 import subprocess
@@ -66,6 +67,17 @@ def ocr_available() -> bool:
     return shutil.which("ocrmypdf") is not None and shutil.which("tesseract") is not None
 
 
+@functools.lru_cache(maxsize=1)
+def osd_available() -> bool:
+    """Seitenausrichtung (--rotate-pages) braucht die Tesseract-Daten ``osd``."""
+    try:
+        out = subprocess.run(["tesseract", "--list-langs"], capture_output=True, timeout=30, check=False)
+    except (OSError, subprocess.TimeoutExpired):
+        return False
+    langs = (out.stdout + out.stderr).decode("utf-8", "replace").split()
+    return "osd" in langs
+
+
 def run_ocr(
     src: Path,
     workdir: Path,
@@ -83,7 +95,7 @@ def run_ocr(
     cmd = [
         "ocrmypdf",
         "--language", languages,
-        "--rotate-pages",
+        *(["--rotate-pages"] if osd_available() else []),
         "--deskew",
         "--jobs", "1",
         "--output-type", "pdfa" if pdfa else "pdf",

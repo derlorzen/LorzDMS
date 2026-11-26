@@ -61,7 +61,10 @@ jobs:
           docker run --rm --platform ${{ matrix.platform }} --entrypoint /bin/sh lorzdms-test -c '
             set -e
             ocrmypdf --version
-            tesseract --list-langs | grep -q deu
+            tesseract --list-langs | grep -qx deu
+            tesseract --list-langs | grep -qx osd
+            ocrmypdf --language deu+eng --rotate-pages --deskew --jobs 1 --skip-text --quiet \
+              /opt/lorzdms/lorzdms/samples/testbrief-scan.pdf /tmp/ocr-test.pdf
             cd /opt/lorzdms && python3 -c "import lorzdms.api.app, lorzdms.worker, pypdfium2, cryptography; print(\"imports ok\")"
             mkdir -p /tmp/d && LORZDMS_DATA_DIR=/tmp/d LORZDMS_LOCAL_INBOX_ENABLED=false python3 -m lorzdms.maintenance init
             LORZDMS_DATA_DIR=/tmp/d python3 -m lorzdms.maintenance backup-pre
