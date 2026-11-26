@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.4 – 2026-11-27
+
+- „Erneut versuchen“ setzt endgültig fehlgeschlagene Dokumente auf den passenden Schritt zurück und verarbeitet sie
+  wirklich neu (vorher endeten die Jobs sofort wieder im Zustand „Fehler“)
+- Erneute Analyse wiederholt die Textextraktion, wenn noch kein Text vorliegt
+
 ## 0.1.3 – 2026-11-27
 
 - OCR: Tesseract-Daten für die Seitenausrichtung (osd) fehlten im Image, dadurch schlug die OCR für Scans fehl.

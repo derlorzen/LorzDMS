@@ -704,9 +704,7 @@ def register_routes(app: FastAPI) -> None:
 
     @app.post("/api/jobs/retry-dead")
     def retry_dead(user: User = Depends(admin)):
-        n = jobqueue.retry_dead()
-        db.audit("jobs.retry_dead", user.id, None, count=n)
-        return {"requeued": n}
+        return {"requeued": actions.retry_failed_jobs(user.id)}
 
     @app.get("/api/users")
     def users(user: User = Depends(admin)):

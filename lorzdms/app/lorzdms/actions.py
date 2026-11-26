@@ -73,18 +73,48 @@ def skip(doc_id: int, user_id: int) -> None:
     db.audit("document.skip", user_id, f"document:{doc_id}")
 
 
+def _resume_state(doc: dict, *, force_ocr: bool = False) -> str:
+    """Zustand, ab dem ein Dokument erneut verarbeitet wird (nichts überspringen, was fehlt)."""
+    doc_id = doc["id"]
+    if not processor.original_path(doc_id).exists():
+        if doc["source_kind"] == "upload":
+            raise ActionError("Arbeitskopie des Uploads fehlt; bitte erneut hochladen")
+        return states.NEW  # Datei neu aus der Quelle abrufen
+    if doc.get("sha256") is None:
+        return states.FETCHED
+    has_text = db.one("SELECT 1 FROM document_text WHERE document_id=?", (doc_id,)) is not None
+    if force_ocr or not has_text:
+        return states.VALIDATED
+    return states.EXTRACTED
+
+
+def retry_failed_jobs(user_id: int | None) -> int:
+    """Endgültig fehlgeschlagene Jobs neu einreihen; zugehörige Dokumente im Zustand
+    'failed' werden auf den passenden Wiederaufnahme-Zustand zurückgesetzt."""
+    for job in db.query("SELECT payload FROM jobs WHERE state='dead' AND kind='process_document'"):
+        try:
+            doc_id = int(json.loads(job["payload"])["document_id"])
+            doc = load(doc_id)
+        except Exception:  # noqa: BLE001 - defekte/verwaiste Jobs einfach erneut versuchen
+            continue
+        if doc["state"] != states.FAILED:
+            continue
+        try:
+            target = _resume_state(doc)
+        except ActionError:
+            continue
+        db.execute("UPDATE documents SET state=?, state_changed_at=?, error=NULL WHERE id=?", (target, db.utcnow(), doc_id))
+        journal(doc_id, "retry", "info", "Erneuter Versuch nach endgültigem Fehler", user=user_id)
+    n = jobqueue.retry_dead()
+    db.audit("jobs.retry_dead", user_id, None, count=n)
+    return n
+
+
 def reanalyze(doc_id: int, user_id: int, *, force_ocr: bool = False) -> None:
     doc = load(doc_id)
     if doc["state"] not in (states.NEEDS_REVIEW, states.OBSERVED, states.EXCLUDED, states.DUPLICATE, states.FAILED):
         raise ActionError(f"Erneute Analyse im Zustand '{doc['state']}' nicht möglich")
-    if not processor.original_path(doc_id).exists():
-        if doc["source_kind"] == "upload":
-            raise ActionError("Arbeitskopie des Uploads fehlt; bitte erneut hochladen")
-        target = states.NEW  # Datei neu aus der Quelle abrufen
-    elif doc.get("sha256") is None:
-        target = states.FETCHED
-    else:
-        target = states.VALIDATED if force_ocr else states.EXTRACTED
+    target = _resume_state(doc, force_ocr=force_ocr)
     db.execute("UPDATE documents SET state=?, state_changed_at=?, error=NULL WHERE id=?", (target, db.utcnow(), doc_id))
     journal(doc_id, "review", "info", "Erneute Analyse angefordert", user=user_id, force_ocr=force_ocr)
     _enqueue(doc_id, force_ocr=force_ocr)

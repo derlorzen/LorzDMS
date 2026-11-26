@@ -290,3 +290,27 @@ def test_setup_test_run(fake, tree, account):
 
     report = run_test()
     assert report["ok"], report
+
+
+@needs_ocr
+def test_retry_failed_ocr_reprocesses_document(fake, tree, account, monkeypatch):
+    """Ein an der OCR gescheitertes Dokument wird über 'Erneut versuchen' wirklich neu verarbeitet."""
+    def broken_ocr(*a, **k):
+        raise textmod.OcrFailed("Error opening data file osd.traineddata")
+
+    monkeypatch.setattr(textmod, "run_ocr", broken_ocr)
+    doc_id, _ = intake.register_upload(synth.scan_pdf(synth.DOCS["rechnung"]), "scan.pdf", None)
+    for _ in range(10):  # Backoff überspringen, bis der Job endgültig scheitert
+        db.execute("UPDATE jobs SET run_after=? WHERE state='queued'", (db.utcnow(),))
+        if not drain():
+            break
+    assert doc(doc_id)["state"] == states.FAILED
+    assert db.one("SELECT COUNT(*) FROM jobs WHERE state='dead'")[0] == 1
+
+    monkeypatch.undo()
+    assert actions.retry_failed_jobs(None) == 1
+    assert doc(doc_id)["state"] == states.VALIDATED  # Text fehlt -> Extraktion wiederholen
+    drain()
+    d = doc(doc_id)
+    assert d["state"] == states.OBSERVED and d["error"] is None
+    assert "Musterhosting" in db.one("SELECT text FROM document_text WHERE document_id=?", (doc_id,))[0]
