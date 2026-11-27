@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.7 – 2026-11-27
+
+- Nativer OpenRouter-Provider für Perplexity Decider v1.3 (free): Ordnerklassifizierung, Dokumenttyp und Vertraulichkeit über Decisions; belegte Metadaten über Extractions.
+- Feste API-Endpunkte und Modellkennung; keine Chat-Completions, keine erdachten Metadaten, explizite Nicht-Zuordnung und Prüfung bei API-Fehlern. Externe KI-Freigabe, bestehende Ablageregeln und Konfidenzgrenzen bleiben unverändert.
+
 ## 0.1.6 – 2026-11-27
 
 - Eigene OCR-Einstellung für NVIDIA Nemotron OCR v2 (multilingual) mit separatem verschlüsseltem API-Key und ausdrücklicher Freigabe der Bildübertragung.

@@ -4,6 +4,7 @@
 - ``openai_compatible``: OpenAI, OpenRouter, Mistral, Azure-OpenAI-kompatible Gateways,
   LM Studio, vLLM, LocalAI (``/v1/chat/completions``)
 - ``anthropic``: Anthropic Messages API
+- ``openrouter_decider``: native Perplexity Decisions und Extractions APIs
 
 Externe Provider dürfen nur genutzt werden, wenn ``allow_external_ai`` aktiviert ist.
 """
@@ -87,7 +88,7 @@ def check_url(url: str) -> bool:
 
 
 def is_external(cfg: ProviderConfig) -> bool:
-    if cfg.kind == "anthropic":
+    if cfg.kind in ("anthropic", "openrouter_decider"):
         return True
     return not check_url(cfg.base_url)
 
@@ -113,6 +114,9 @@ def _post(url: str, headers: dict, body: dict, timeout: float) -> dict:
 def analyze(cfg: ProviderConfig, text: str, folders: list[dict], hints: dict, *, allow_external: bool) -> AiCall:
     if is_external(cfg) and not allow_external:
         raise ExternalNotAllowed("Externer KI-Provider ist nicht freigegeben (allow_external_ai)")
+    if cfg.kind == "openrouter_decider":
+        from . import decider
+        return decider.analyze(cfg, text, folders, hints)
     system, user = build_messages(text, folders, hints)
     schema = json_schema()
     last_error: Exception | None = None

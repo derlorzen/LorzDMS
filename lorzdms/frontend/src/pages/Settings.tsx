@@ -103,18 +103,23 @@ export default function Settings({ me }: { me: Me }) {
         <Section title="KI-Provider" actions={<button className="btn btn-primary" onClick={saveAi} disabled={act.busy}>{t("save")}</button>}>
           <div className="space-y-3">
             <Field label="Typ">
-              <select className="input" value={ai.kind} onChange={(e) => setAi({ ...ai, kind: e.target.value })}>
+              <select className="input" value={ai.kind} onChange={(e) => {
+                const kind = e.target.value;
+                setAi(kind === "openrouter_decider" ? { kind, base_url: "https://openrouter.ai/api/alpha", model: "perplexity/pplx-decider-v1.3:free", api_key: "" } : { ...ai, kind, base_url: ai.kind === "openrouter_decider" ? "" : ai.base_url, model: ai.kind === "openrouter_decider" ? "" : ai.model, api_key: "" });
+              }}>
                 <option value="none">Keine KI – nur Regeln</option>
                 <option value="ollama">Ollama (lokal oder im Heimnetz)</option>
                 <option value="openai_compatible">OpenAI-kompatibel (OpenAI, OpenRouter, Mistral, LM Studio, vLLM …)</option>
                 <option value="anthropic">Anthropic</option>
+                <option value="openrouter_decider">OpenRouter – Perplexity Decider v1.3 (free)</option>
               </select>
             </Field>
             {ai.kind !== "none" && <>
-              <Field label="Basis-URL"><input className="input" name="lorzdms-ai-base-url" autoComplete="off" spellCheck={false} placeholder={ai.kind === "ollama" ? "http://192.168.1.10:11434" : ai.kind === "anthropic" ? "https://api.anthropic.com" : "https://api.openai.com/v1"} value={ai.base_url} onChange={(e) => setAi({ ...ai, base_url: e.target.value })} /></Field>
-              <Field label="Modell"><input className="input" name="lorzdms-ai-model" autoComplete="off" spellCheck={false} value={ai.model} onChange={(e) => setAi({ ...ai, model: e.target.value })} /></Field>
+              <Field label="Basis-URL"><input className="input" name="lorzdms-ai-base-url" readOnly={ai.kind === "openrouter_decider"} autoComplete="off" spellCheck={false} placeholder={ai.kind === "ollama" ? "http://192.168.1.10:11434" : ai.kind === "anthropic" ? "https://api.anthropic.com" : "https://api.openai.com/v1"} value={ai.base_url} onChange={(e) => setAi({ ...ai, base_url: e.target.value })} /></Field>
+              <Field label="Modell"><input className="input" name="lorzdms-ai-model" readOnly={ai.kind === "openrouter_decider"} autoComplete="off" spellCheck={false} value={ai.model} onChange={(e) => setAi({ ...ai, model: e.target.value })} /></Field>
               <Field label={`API-Key${s.data.ai_provider?.has_key ? " (gespeichert – leer lassen zum Beibehalten)" : ""}`}><input className="input" type="password" name="lorzdms-ai-api-key" autoComplete="new-password" data-1p-ignore data-lpignore="true" value={ai.api_key} onChange={(e) => setAi({ ...ai, api_key: e.target.value })} /></Field>
             </>}
+            {ai.kind === "openrouter_decider" && <p className="text-xs muted">Native Decisions-API für Dokumenttyp, Vertraulichkeit und Ordnerwahl; Extractions-API für belegte Textfelder. Bis zu 254 freigegebene Ordner. Keine Chat-Completions. Bestehende Regeln und Prüfgrenzen bleiben aktiv. Externe KI muss freigegeben sein. Die Alpha-API und kostenlose Modelle unterliegen Verfügbarkeits- und Nutzungslimits.</p>}
             <p className="text-xs muted">Gemini, Azure OpenAI und weitere Anbieter sind über OpenAI-kompatible Endpunkte nutzbar; eigene Adapter folgen.</p>
           </div>
         </Section>

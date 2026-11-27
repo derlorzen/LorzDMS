@@ -19,7 +19,7 @@ from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Redirect
 from pydantic import BaseModel, Field
 
 from .. import __version__, actions, appsettings, bootstrap, crypto, db, jobqueue, services
-from ..ai import providers as ai_providers
+from ..ai import providers as ai_providers, decider
 from ..config import get_settings
 from ..google import http as ghttp
 from ..google import oauth
@@ -110,7 +110,7 @@ class SourceBody(BaseModel):
 
 
 class AiProviderBody(BaseModel):
-    kind: str = Field(pattern="^(none|ollama|openai_compatible|anthropic)$")
+    kind: str = Field(pattern="^(none|ollama|openai_compatible|anthropic|openrouter_decider)$")
     base_url: str = ""
     model: str = ""
     api_key: str | None = None
@@ -704,6 +704,20 @@ def register_routes(app: FastAPI) -> None:
             appsettings.set("ai_provider", {"kind": "none"})
             crypto.delete_secret("ai_api_key")
             return {"ok": True}
+        if body.kind == decider.KIND:
+            # Pin the official API endpoint and exact supported model.
+            if body.model and body.model != decider.MODEL:
+                raise HTTPException(400, "Decider: Modell nicht unterstützt")
+            if body.base_url and body.base_url.rstrip("/") not in (decider.BASE_URL, decider.BASE_URL + "/decisions"):
+                raise HTTPException(400, "Decider: ungültiger Endpunkt")
+            body.base_url, body.model = decider.BASE_URL, decider.MODEL
+            previous = appsettings.get("ai_provider") or {}
+            previous_base = (previous.get("base_url") or "").rstrip("/")
+            can_reuse = previous_base in ("https://openrouter.ai/api/v1", decider.BASE_URL, decider.BASE_URL + "/decisions")
+            if not (body.api_key and body.api_key.strip()):
+                body.api_key = None
+                if not can_reuse or not crypto.get_secret("ai_api_key"):
+                    raise HTTPException(400, "Decider: OpenRouter API-Key fehlt")
         try:
             external = ai_providers.is_external(ai_providers.ProviderConfig(body.kind, body.base_url, body.model))
         except ai_providers.ProviderError as exc:

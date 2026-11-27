@@ -130,3 +130,25 @@ def test_nvidia_ocr_provider_settings(client):
     assert crypto.get_secret("ai_api_key") is None
     assert client.put("/api/settings/ocr-provider", json={"kind": "local"}, headers=H1).status_code == 200
     assert crypto.get_secret("ocr_api_key") is None
+
+
+def test_decider_provider_configuration(client):
+    from lorzdms.ai import decider
+    from lorzdms import appsettings, crypto
+    client.get("/api/me", headers=H1)
+    body = {"kind": decider.KIND, "base_url": decider.BASE_URL, "model": decider.MODEL}
+    assert client.put("/api/settings/ai-provider", json=body, headers=H1).status_code == 400
+    assert client.put("/api/settings/ai-provider", json={**body, "base_url": "https://example.org", "api_key": "test-key"}, headers=H1).status_code == 400
+    assert client.put("/api/settings/ai-provider", json={**body, "model": "other", "api_key": "test-key"}, headers=H1).status_code == 400
+    # Retain the already stored OpenRouter key from the legacy incorrect configuration.
+    appsettings.set("ai_provider", {"kind": "openai_compatible", "base_url": decider.BASE_URL + "/decisions",
+                                    "model": decider.MODEL, "has_key": True})
+    crypto.put_secret("ai_api_key", "test-key")
+    response = client.put("/api/settings/ai-provider", json=body, headers=H1)
+    assert response.status_code == 200 and response.json()["allowed"] is False
+    state = client.get("/api/settings", headers=H1).json()
+    assert state["ai_provider"]["kind"] == decider.KIND
+    assert state["ai_provider"]["base_url"] == decider.BASE_URL
+    assert state["ai_provider"]["has_key"] is True
+    assert "test-key" not in str(state)
+    assert crypto.get_secret("ai_api_key") == "test-key"
