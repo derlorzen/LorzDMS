@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.2.0 – 2026-11-27
+
+- **Fristen und Erinnerungen**: Fälligkeitsdaten und erkannte Fristen (Zahlung, Kündigung, Widerspruch, Antwort, Termin, Wiedervorlage) werden bei der Analyse als Fristen übernommen; berechnete Fristen sind als „bitte prüfen“ markiert. Fristen lassen sich manuell anlegen, erledigen, verwerfen und verschieben. Verworfene Fristen tauchen bei erneuter Analyse nicht wieder auf.
+- Erinnerungen über Home Assistant (`persistent_notification.create` oder `notify.<dienst>`): eine am Vorlauftag (Standard 3 Tage), eine am Fälligkeitstag, frühestens ab einer einstellbaren Uhrzeit. Übertragen werden nur Titel und Datum der Frist. Dafür braucht die App jetzt die Berechtigung `homeassistant_api`.
+- **Vorgänge**: bündeln Dokumente und Fristen. Mit einer Referenz (Aktenzeichen, Vertrags-, Versicherungs- oder Kundennummer) werden neue Dokumente automatisch einem offenen Vorgang zugeordnet.
+- **Tags**: in der Dokumentansicht bearbeiten, Dokumente nach Tag filtern, Tags umbenennen, zusammenführen und entfernen.
+- Übersicht zeigt überfällige und anstehende Fristen.
+- Beim Update werden künftige Fälligkeitsdaten und Fristen aus bereits analysierten Dokumenten einmalig übernommen; vergangene nicht.
+
 ## 0.1.7 – 2026-11-27
 
 - Nativer OpenRouter-Provider für Perplexity Decider v1.3 (free): Ordnerklassifizierung, Dokumenttyp und Vertraulichkeit über Decisions; belegte Metadaten über Extractions.

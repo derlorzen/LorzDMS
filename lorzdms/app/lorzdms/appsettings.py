@@ -26,6 +26,11 @@ DEFAULTS: dict[str, Any] = {
     "test_run_ok": False,
     "setup_completed": False,
     "default_archive_account_id": None,
+    # Fristen & Erinnerungen
+    "reminders_enabled": True,
+    "reminder_days_default": 3,
+    "reminder_hour": 8,  # Erinnerungen frühestens ab dieser Stunde (Ortszeit) senden
+    "notify_service": "persistent_notification.create",  # oder notify.mobile_app_<gerät>
 }
 
 

@@ -73,6 +73,21 @@ Regeln ergeben Konfidenz 100 %. Reine KI-Entscheidungen werden standardmäßig a
 begrenzt und daher immer zur Bestätigung vorgelegt, bis Sie die Schwellen anhand realer
 Ergebnisse überprüft haben.
 
+## Fristen, Vorgänge und Tags
+
+- **Fristen** entstehen aus der Analyse (Fälligkeitsdatum, erkannte Fristen) oder manuell. Aus dem
+  Dokument *berechnete* Fristen (z. B. „innerhalb eines Monats“) sind als „bitte prüfen“ markiert.
+  „Verwerfen“ blendet eine erkannte Frist dauerhaft aus.
+- **Erinnerungen** sendet LorzDMS über Home Assistant: einmal am Vorlauftag (Standard 3 Tage vorher)
+  und einmal am Fälligkeitstag. Unter *Fristen → Benachrichtigungen* wählen Sie den Dienst:
+  `persistent_notification.create` (Seitenleiste) oder z. B. `notify.mobile_app_<gerät>` (Push).
+  Übertragen werden nur Titel und Datum der Frist.
+- **Vorgänge** bündeln zusammengehörige Dokumente und Fristen. Hat ein offener Vorgang eine Referenz,
+  werden neue Dokumente mit genau dieser Nummer automatisch zugeordnet (Groß-/Kleinschreibung,
+  Leer- und Trennzeichen spielen keine Rolle).
+- **Tags** vergibt die KI oder eine Regel; Sie können sie in der Dokumentansicht ändern und unter
+  *Tags* umbenennen, zusammenführen oder entfernen. Tags werden nur in LorzDMS gespeichert, nicht in Drive.
+
 ## Migration des bestehenden Gmail-PDF-Imports
 
 Ihr bisheriger Import bleibt unverändert aktiv. Empfohlenes Vorgehen:

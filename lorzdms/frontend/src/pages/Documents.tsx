@@ -1,5 +1,5 @@
-import { useRef, useState } from "react";
-import { api, Doc, Me } from "../api";
+import { useEffect, useRef, useState } from "react";
+import { api, Doc, Me, TagCount } from "../api";
 import { fmtDate, t } from "../i18n";
 import DocDetail from "../components/DocDetail";
 import { ErrorBox, Notice, StateBadge, useAction, useApi } from "../ui";
@@ -7,7 +7,21 @@ import { ErrorBox, Notice, StateBadge, useAction, useApi } from "../ui";
 export default function Documents({ id, go, me }: { id?: number; go: (to: string) => void; me: Me }) {
   const [q, setQ] = useState("");
   const [state, setState] = useState("");
-  const [query, setQuery] = useState("");
+  const hashTag = () => new URLSearchParams(window.location.hash.split("?")[1] ?? "").get("tag") ?? "";
+  const [tag, setTag] = useState(hashTag);
+  const [query, setQuery] = useState(() => (hashTag() ? `&tag=${encodeURIComponent(hashTag())}` : ""));
+  const tags = useApi<{ items: TagCount[] }>("tags");
+  useEffect(() => {
+    const on = () => {
+      const h = hashTag();
+      if (h && window.location.hash.startsWith("#/documents?")) {
+        setTag(h);
+        setQuery(`&tag=${encodeURIComponent(h)}`);
+      }
+    };
+    window.addEventListener("hashchange", on);
+    return () => window.removeEventListener("hashchange", on);
+  }, []);
   const list = useApi<{ total: number; items: Doc[] }>(`documents?limit=100${query}`, [query]);
   const fileRef = useRef<HTMLInputElement>(null);
   const act = useAction();
@@ -26,6 +40,7 @@ export default function Documents({ id, go, me }: { id?: number; go: (to: string
     const p = new URLSearchParams();
     if (q.trim()) p.set("q", q.trim());
     if (state) p.set("state", state);
+    if (tag) p.set("tag", tag);
     setQuery(p.toString() ? `&${p}` : "");
   };
   const upload = (files: FileList | null) =>
@@ -69,6 +84,10 @@ export default function Documents({ id, go, me }: { id?: number; go: (to: string
           <option value="failed,quarantined">Fehler</option>
           <option value="duplicate">Duplikate</option>
         </select>
+        <select className="input w-48" value={tag} onChange={(e) => setTag(e.target.value)} aria-label={t("tags")}>
+          <option value="">Alle Tags</option>
+          {(tags.data?.items ?? []).map((x) => <option key={x.tag} value={x.tag}>{x.tag} ({x.count})</option>)}
+        </select>
         <button className="btn" type="submit">{t("search").replace(" …", "")}</button>
       </form>
       <div className="panel overflow-x-auto">
@@ -79,7 +98,10 @@ export default function Documents({ id, go, me }: { id?: number; go: (to: string
           <tbody>
             {(list.data?.items ?? []).map((d) => (
               <tr key={d.id} className="clickable" onClick={() => go(`documents/${d.id}`)}>
-                <td className="max-w-xs truncate">{d.target_name ?? d.original_filename}</td>
+                <td className="max-w-xs">
+                  <div className="truncate">{d.target_name ?? d.original_filename}</div>
+                  {d.tags?.length ? <div className="truncate text-xs muted">{d.tags.join(" · ")}</div> : null}
+                </td>
                 <td>{d.document_type ?? "–"}</td>
                 <td className="max-w-[10rem] truncate">{d.sender ?? "–"}</td>
                 <td className="whitespace-nowrap">{d.document_date ?? "–"}</td>

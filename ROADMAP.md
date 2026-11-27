@@ -44,7 +44,8 @@ Die Phasen folgen dem Auftrag; die Home-Assistant-App hat Vorrang vor Coolify.
 - ⬜ Import bestehender Drive-Archive (Dry-Run), Lernfunktion, Embeddings, Assistent
 
 ## Phase 5 – Erweiterte Funktionen
-- ⬜ Vorgänge, Fristen, Berichte (19 Uhr), Benachrichtigungen, Kalender, IMAP, WebDAV
+- ✅ Vorgänge, Fristen, Erinnerungen über Home Assistant, Tags (0.2.0)
+- ⬜ Berichte (19 Uhr), Kalender, IMAP, WebDAV
 
 ## Phase 6 – Integrationen
 - ⬜ HACS-Integration `custom_components/lorzdms`, Dashboard, Blueprints

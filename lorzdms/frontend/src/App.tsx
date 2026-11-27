@@ -10,6 +10,9 @@ import Folders from "./pages/Folders";
 import Rules from "./pages/Rules";
 import Settings from "./pages/Settings";
 import Setup from "./pages/Setup";
+import Deadlines from "./pages/Deadlines";
+import Cases from "./pages/Cases";
+import Tags from "./pages/Tags";
 
 export function useRoute(): [string[], (to: string) => void] {
   const parse = () => (window.location.hash.replace(/^#\/?/, "") || "dashboard").split("/");
@@ -26,6 +29,9 @@ const NAV: { key: string; label: string; admin?: boolean }[] = [
   { key: "dashboard", label: t("dashboard") },
   { key: "review", label: t("review") },
   { key: "documents", label: t("documents") },
+  { key: "deadlines", label: t("deadlines") },
+  { key: "cases", label: t("cases") },
+  { key: "tags", label: t("tags") },
   { key: "sources", label: t("sources"), admin: true },
   { key: "folders", label: t("folders"), admin: true },
   { key: "rules", label: t("rules") },
@@ -53,7 +59,7 @@ export default function App() {
       </div>
     );
   const isAdmin = me.data.role === "admin";
-  const page = route[0];
+  const page = route[0].split("?")[0];
   const id = route[1] ? Number(route[1]) : undefined;
   return (
     <div className="flex min-h-screen">
@@ -85,6 +91,9 @@ export default function App() {
           {page === "dashboard" && <Dashboard go={go} />}
           {page === "review" && <Review id={id} go={go} me={me.data} />}
           {page === "documents" && <Documents id={id} go={go} me={me.data} />}
+          {page === "deadlines" && <Deadlines go={go} me={me.data} />}
+          {page === "cases" && <Cases id={id} go={go} me={me.data} />}
+          {page === "tags" && <Tags go={go} me={me.data} />}
           {page === "sources" && isAdmin && <Sources />}
           {page === "folders" && isAdmin && <Folders />}
           {page === "rules" && <Rules me={me.data} />}

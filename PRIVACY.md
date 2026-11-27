@@ -13,6 +13,7 @@ Vorschau-Cache (nicht im Backup).
 | Google (Drive, Gmail, OAuth) | immer, sobald verbunden | API-Abrufe; Upload/Verschieben nur in freigegebene Ordner |
 | Externer KI-Provider (OpenAI, Anthropic, …) | **nur** wenn eingerichtet **und** „Externe KI-Provider erlauben“ aktiv | Dokumenttext (max. 24 000 Zeichen), Dateiname, Betreff, Absenderadresse, Ordnerliste |
 | Lokaler KI-Server (Ollama im Heimnetz) | wenn eingerichtet | wie oben, verlässt das lokale Netz nicht |
+| Home Assistant (lokal, über den Supervisor) | wenn Fristen-Erinnerungen aktiv sind | Titel und Fälligkeitsdatum der Frist; bei `notify.*`-Diensten leitet Home Assistant die Nachricht ggf. an die Companion-App weiter |
 
 Jede KI-Analyse wird im Journal des Dokuments mit Provider und Modell protokolliert.
 

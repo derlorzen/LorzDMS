@@ -12,6 +12,10 @@ const de = {
   mode_auto: "Automatisch ab Schwellenwert", worker: "Hintergrunddienst", no_access: "Kein Zugriff",
   no_access_text: "Ihr Home-Assistant-Benutzer ist für LorzDMS noch nicht freigegeben. Bitte wenden Sie sich an einen LorzDMS-Administrator.",
   open_in_drive: "In Google Drive öffnen", download: "Herunterladen", empty: "Keine Einträge",
+  deadlines: "Fristen", cases: "Vorgänge", tags: "Tags", due: "Fällig", overdue: "Überfällig", next_7_days: "Nächste 7 Tage",
+  open_cases: "Offene Vorgänge", done: "Erledigt", dismiss: "Verwerfen", reopen: "Wieder öffnen", close_case: "Abschließen",
+  new_deadline: "Neue Frist", new_case: "Neuer Vorgang", reference: "Referenz", description: "Beschreibung", kind: "Art",
+  remind_days: "Erinnern (Tage vorher)", notifications: "Benachrichtigungen", all: "Alle", open: "Offen",
 };
 type Dict = typeof de;
 const en: Dict = {
@@ -28,10 +32,15 @@ const en: Dict = {
   mode_auto: "Automatic above threshold", worker: "Background worker", no_access: "No access",
   no_access_text: "Your Home Assistant user has not been granted access to LorzDMS yet. Please ask a LorzDMS administrator.",
   open_in_drive: "Open in Google Drive", download: "Download", empty: "No entries",
+  deadlines: "Deadlines", cases: "Cases", tags: "Tags", due: "Due", overdue: "Overdue", next_7_days: "Next 7 days",
+  open_cases: "Open cases", done: "Done", dismiss: "Dismiss", reopen: "Reopen", close_case: "Close",
+  new_deadline: "New deadline", new_case: "New case", reference: "Reference", description: "Description", kind: "Kind",
+  remind_days: "Remind (days before)", notifications: "Notifications", all: "All", open: "Open",
 };
 
 const lang = (navigator.language || "de").toLowerCase().startsWith("de") ? "de" : "en";
 const dict: Dict = lang === "de" ? de : en;
 export const t = (k: keyof Dict): string => dict[k] ?? k;
 export const locale = lang === "de" ? "de-DE" : "en-GB";
+export const fmtDay = (iso?: string | null) => (iso ? new Date(`${iso}T12:00:00`).toLocaleDateString(locale, { weekday: "short", day: "2-digit", month: "2-digit", year: "numeric" }) : "–");
 export const fmtDate = (iso?: string | null) => (iso ? new Date(iso).toLocaleString(locale, { dateStyle: "short", timeStyle: "short" }) : "–");

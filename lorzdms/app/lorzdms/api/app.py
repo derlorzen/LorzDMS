@@ -18,7 +18,7 @@ from fastapi import Body, Depends, FastAPI, File, Form, HTTPException, Query, Re
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse, Response
 from pydantic import BaseModel, Field
 
-from .. import __version__, actions, appsettings, bootstrap, crypto, db, jobqueue, services
+from .. import __version__, actions, appsettings, bootstrap, crypto, db, jobqueue, notify, organize, services
 from ..ai import providers as ai_providers, decider
 from ..config import get_settings
 from ..google import http as ghttp
@@ -28,6 +28,7 @@ from ..pipeline import naming, rules, states, nvidia_ocr
 from ..pipeline.processor import load
 from ..pipeline.text import ocr_available
 from ..sources import intake
+from . import organize_routes
 from .deps import User, current_user, require, visible_clause
 
 log = logging.getLogger("lorzdms.api")
@@ -210,6 +211,8 @@ def register_routes(app: FastAPI) -> None:
             "mode": appsettings.get("processing_mode"),
             "ocr_available": ocr_available(),
             "ai_configured": bool((appsettings.get("ai_provider") or {}).get("kind") not in (None, "none")),
+            "deadlines": organize_routes.deadline_summary(user),
+            "open_cases": db.one("SELECT COUNT(*) n FROM cases WHERE status='open'")["n"],
         }
 
     # Dokumente -----------------------------------------------------------------
@@ -222,6 +225,8 @@ def register_routes(app: FastAPI) -> None:
         sender: str | None = None,
         date_from: str | None = None,
         date_to: str | None = None,
+        tag: str | None = Query(default=None, max_length=40),
+        case_id: int | None = None,
         limit: int = Query(default=50, ge=1, le=200),
         offset: int = Query(default=0, ge=0),
     ):
@@ -242,6 +247,12 @@ def register_routes(app: FastAPI) -> None:
         if date_to:
             where.append("d.document_date <= ?")
             params.append(date_to)
+        if tag:
+            where.append("EXISTS (SELECT 1 FROM json_each(CASE WHEN json_valid(d.tags) THEN d.tags ELSE '[]' END) WHERE value = ?)")
+            params.append(tag)
+        if case_id is not None:
+            where.append("EXISTS (SELECT 1 FROM document_cases dc WHERE dc.document_id=d.id AND dc.case_id=?)")
+            params.append(case_id)
         join = ""
         order = "d.id DESC"
         if q and fts_query(q):
@@ -264,6 +275,8 @@ def register_routes(app: FastAPI) -> None:
         d["has_local_file"] = (get_settings().temp_dir / f"doc-{doc_id}" / "original").exists()
         if d.get("duplicate_of"):
             d["duplicate"] = doc_out(db.one("SELECT * FROM documents WHERE id=?", (d["duplicate_of"],)))
+        d["cases"] = organize.cases_for_document(doc_id)
+        d["deadlines"] = organize_routes.deadlines_for_document(doc_id)
         return d
 
     @app.get("/api/documents/{doc_id}/text")
@@ -658,7 +671,8 @@ def register_routes(app: FastAPI) -> None:
     @app.patch("/api/settings")
     def patch_settings(values: dict = Body(...), user: User = Depends(admin)):
         allowed = {"processing_mode", "auto_threshold", "suggest_threshold", "ai_confidence_cap", "allow_external_ai",
-                   "filename_template", "original_strategy", "review_sensitive"}
+                   "filename_template", "original_strategy", "review_sensitive",
+                   "reminders_enabled", "reminder_days_default", "reminder_hour", "notify_service"}
         for k, v in values.items():
             if k not in allowed:
                 raise HTTPException(400, f"Einstellung '{k}' ist nicht änderbar")
@@ -671,6 +685,17 @@ def register_routes(app: FastAPI) -> None:
                 raise HTTPException(400, "; ".join(naming.validate_template(v)))
             if k in ("auto_threshold", "suggest_threshold", "ai_confidence_cap") and not (0 <= float(v) <= 1):
                 raise HTTPException(400, f"{k} muss zwischen 0 und 1 liegen")
+            if k == "reminder_days_default" and not (isinstance(v, int) and 0 <= v <= 365):
+                raise HTTPException(400, "Vorlauf muss 0–365 Tage betragen")
+            if k == "reminder_hour" and not (isinstance(v, int) and 0 <= v <= 23):
+                raise HTTPException(400, "Uhrzeit muss 0–23 sein")
+            if k == "notify_service":
+                try:
+                    notify.validate_service(v)
+                except ValueError as exc:
+                    raise HTTPException(400, str(exc)) from exc
+            if k == "reminders_enabled" and not isinstance(v, bool):
+                raise HTTPException(400, "reminders_enabled muss true/false sein")
             if k == "original_strategy" and v not in ("original_only", "original_plus_derivative", "derivative_only"):
                 raise HTTPException(400, "Ungültige Strategie")
             appsettings.set(k, v)
@@ -799,6 +824,8 @@ def register_routes(app: FastAPI) -> None:
         appsettings.set("setup_completed", True)
         db.audit("setup.completed", user.id)
         return {"ok": True}
+
+    organize_routes.register(app)
 
     # Oberfläche ----------------------------------------------------------------
     @app.get("/", include_in_schema=False)
