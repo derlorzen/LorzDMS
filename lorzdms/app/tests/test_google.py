@@ -93,6 +93,19 @@ def test_gmail_history_expired_falls_back(fake, account):
     assert intake.sync_source(sid) == 1
 
 
+def test_gmail_deleted_message_in_history_is_skipped(fake, account):
+    sid = db.execute("INSERT INTO sources(kind, name, account_id, config, created_at) VALUES ('gmail','G',?, '{}', ?)",
+                     (account, db.utcnow())).lastrowid
+    assert intake.sync_source(sid) == 0  # Erstlauf setzt den History-Cursor
+    gone = fake.add_message(sender="a@b.de", subject="Entwurf", attachments=[("X.pdf", synth.text_pdf(["x"]), "application/pdf")])
+    del fake.messages[gone]  # in der History gemeldet, danach gelöscht -> 404
+    fake.add_message(sender="c@d.de", subject="echt", attachments=[("B.pdf", synth.text_pdf(["b"]), "application/pdf")])
+    assert intake.sync_source(sid) == 1
+    src = db.one("SELECT cursor FROM sources WHERE id=?", (sid,))
+    assert src["cursor"] == str(fake.history_id)
+    assert intake.sync_source(sid) == 0
+
+
 def test_gmail_client_has_no_write_methods():
     from lorzdms.google.gmail import GmailClient
 
