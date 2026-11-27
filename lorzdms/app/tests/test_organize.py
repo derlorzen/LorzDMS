@@ -244,3 +244,24 @@ def test_migration_backfills_only_future_deadlines(settings):
         {"document_id": a, "title": "Zahlung: Musterhosting – Rechnung", "kind": "payment", "due_date": future, "explicit": 1, "quote": None},
         {"document_id": b, "title": "Widerspruch: Bescheid", "kind": "objection", "due_date": future, "explicit": 0, "quote": "innerhalb eines Monats"},
     ]
+
+
+def test_document_filters_folder_subtree_year_sort(client):
+    db.execute("INSERT INTO google_accounts(email, scopes, status, created_at, updated_at) VALUES ('x','', 'connected', 'n','n')")
+    for drive_id, path in [("f1", "Ablage/Privat/Auto"), ("f2", "Ablage/Privat_Alt"), ("f3", "Ablage/Verein")]:
+        db.execute("INSERT INTO drive_folders(account_id, drive_id, name, path, role) VALUES (1,?,?,?, 'archive')", (drive_id, path, path))
+    a, b, c = make_doc("A", sender="Zeta"), make_doc("B", sender="alpha"), make_doc("C", sender=None)
+    for doc_id, folder, day in [(a, "f1", "2025-03-01"), (b, "f2", "2026-01-05"), (c, "f3", "2026-06-01")]:
+        db.execute("UPDATE documents SET target_folder_drive_id=?, document_date=? WHERE id=?", (folder, day, doc_id))
+    ids = lambda qs: [d["id"] for d in client.get(f"/api/documents?{qs}", headers=H1).json()["items"]]  # noqa: E731
+    assert ids("folder=Ablage/Privat") == [a]  # Unterordner ja, "Privat_Alt" nicht
+    assert ids("folder=Ablage") == [c, b, a]
+    assert ids("date_from=2026-01-01&date_to=2026-12-31&sort=date_asc") == [b, c]
+    assert ids("sort=sender") == [b, a, c]
+    f = client.get("/api/meta/filters", headers=H1).json()
+    assert f["years"] == ["2026", "2025"]
+    assert {x["path"]: x["count"] for x in f["folders"]} == {"Ablage/Privat/Auto": 1, "Ablage/Privat_Alt": 1, "Ablage/Verein": 1}
+
+
+def test_clean_tags_drops_invalid_ai_tags():
+    assert organize.clean_tags(["Auto", "auto", "<b>", "x" * 50, " IT & Telefon "]) == ["Auto", "IT & Telefon"]

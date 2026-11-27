@@ -35,6 +35,7 @@ def fake_handler(calls, *, abstain=False, invalid=False, highly_sensitive=False)
                 "document_type": choose(questions["document_type"], "invoice"),
                 "confidentiality": choose(questions["confidentiality"], "highly_sensitive" if highly_sensitive else "sensitive"),
                 "folder": choose(questions["folder"], "no_match" if abstain else "folder_0", .94),
+                "topic": choose(questions["topic"], "it", .6),
             }
             if invalid:
                 answers["folder"]["choice"] = "unapproved-folder"
@@ -68,6 +69,7 @@ def test_native_decider(settings, monkeypatch):
     assert call.result.amount == 1234.56
     assert call.result.currency == "EUR"
     assert call.result.contract_number is None
+    assert call.result.tags == ["IT & Telefon"]
     assert call.input_tokens == 200 and call.output_tokens == 0
 
 

@@ -7,6 +7,9 @@
 - **Vorgänge**: bündeln Dokumente und Fristen. Mit einer Referenz (Aktenzeichen, Vertrags-, Versicherungs- oder Kundennummer) werden neue Dokumente automatisch einem offenen Vorgang zugeordnet.
 - **Tags**: in der Dokumentansicht bearbeiten, Dokumente nach Tag filtern, Tags umbenennen, zusammenführen und entfernen.
 - Übersicht zeigt überfällige und anstehende Fristen.
+- **Tags automatisch**: Der Decider ordnet jedes Dokument einem Lebensbereich zu (z. B. Auto, Gesundheit, Wohnen, Steuern) und ergänzt das Steuerjahr. Ungültige KI- oder Regel-Tags werden verworfen statt gespeichert.
+- **Neue Dokumentübersicht**: Kacheln mit Vorschau der ersten Seite (umschaltbar auf Liste), Filter für Typ, Absender, Ordner inkl. Unterordnern, Jahr, Tag und Status, Sortierung nach Datum oder Absender.
+- Fix: Seitenvorschauen werden nacheinander gerendert (pdfium ist nicht threadsicher; viele gleichzeitige Vorschauen konnten die Weboberfläche abstürzen lassen).
 - Beim Update werden künftige Fälligkeitsdaten und Fristen aus bereits analysierten Dokumenten einmalig übernommen; vergangene nicht.
 
 ## 0.1.7 – 2026-11-27

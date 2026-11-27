@@ -312,7 +312,7 @@ def step_analyze(doc: dict) -> None:
     if doc["mime_type"] and doc["mime_type"].startswith("image/") and appsettings.get("original_strategy") != "original_only":
         ext = ".pdf"
     target_name = naming.render(template, meta, doc["original_filename"], ext or ".pdf")
-    tags = list(dict.fromkeys((doc["tags"] or []) + a.get("tags", []) + (ai_result.tags if ai_result else [])))
+    tags = organize.clean_tags((doc["tags"] or []) + a.get("tags", []) + (ai_result.tags if ai_result else []))
     decision.update({"folder_drive_id": folder, "confidence": confidence, "review_reasons": reasons, "template": template})
     visibility = a.get("visibility") or ("admins" if ai_result and ai_result.confidentiality == "highly_sensitive" else doc.get("visibility", "members"))
     update(

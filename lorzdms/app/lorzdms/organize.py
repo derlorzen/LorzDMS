@@ -67,6 +67,21 @@ def normalize_tags(tags: list[str]) -> list[str]:
     return out
 
 
+def clean_tags(tags: list) -> list[str]:
+    """Wie normalize_tags, verwirft aber ungültige Einträge statt abzubrechen (für KI- und Regel-Tags)."""
+    out: list[str] = []
+    seen: set[str] = set()
+    for t in tags or []:
+        try:
+            n = normalize_tag(t)
+        except OrganizeError:
+            continue
+        if n.lower() not in seen:
+            seen.add(n.lower())
+            out.append(n)
+    return out[:30]
+
+
 def _clean_ref(value: Any) -> str | None:
     """Referenz so speichern, wie sie eingegeben wurde (nur Leerraum bereinigt)."""
     if value is None:

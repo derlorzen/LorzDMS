@@ -11,6 +11,7 @@ import json
 import logging
 import re
 import shutil
+import threading
 from pathlib import Path
 from typing import Any
 
@@ -33,6 +34,8 @@ from .deps import User, current_user, require, visible_clause
 
 log = logging.getLogger("lorzdms.api")
 STATIC_DIR = Path(__file__).resolve().parent.parent / "static"
+# pdfium ist nicht threadsicher; die Vorschau-Endpunkte laufen im Threadpool (viele Kacheln gleichzeitig).
+_RENDER_LOCK = threading.Lock()
 
 
 def create_app(init: bool = True) -> FastAPI:
@@ -227,6 +230,8 @@ def register_routes(app: FastAPI) -> None:
         date_to: str | None = None,
         tag: str | None = Query(default=None, max_length=40),
         case_id: int | None = None,
+        folder: str | None = Query(default=None, max_length=500),
+        sort: str = Query(default="newest", pattern="^(newest|date_desc|date_asc|sender)$"),
         limit: int = Query(default=50, ge=1, le=200),
         offset: int = Query(default=0, ge=0),
     ):
@@ -253,8 +258,15 @@ def register_routes(app: FastAPI) -> None:
         if case_id is not None:
             where.append("EXISTS (SELECT 1 FROM document_cases dc WHERE dc.document_id=d.id AND dc.case_id=?)")
             params.append(case_id)
+        if folder:
+            # Ordner inklusive Unterordnern (Pfad aus der Ordnerliste)
+            where.append("d.target_folder_drive_id IN (SELECT drive_id FROM drive_folders WHERE path = ? OR path LIKE ? ESCAPE '\\')")
+            esc = folder.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+            params += [folder, f"{esc}/%"]
         join = ""
-        order = "d.id DESC"
+        order = {"newest": "d.id DESC", "date_desc": "COALESCE(d.document_date, substr(d.created_at,1,10)) DESC, d.id DESC",
+                 "date_asc": "COALESCE(d.document_date, substr(d.created_at,1,10)) ASC, d.id ASC",
+                 "sender": "d.sender IS NULL, d.sender COLLATE NOCASE, d.id DESC"}[sort]
         if q and fts_query(q):
             join = "JOIN documents_fts f ON f.rowid=d.id"
             where.append("documents_fts MATCH ?")
@@ -341,16 +353,20 @@ def register_routes(app: FastAPI) -> None:
             if d["mime_type"] == "application/pdf":
                 import pypdfium2 as pdfium
 
-                pdf = pdfium.PdfDocument(str(local))
-                try:
-                    if not 1 <= page <= len(pdf):
-                        raise HTTPException(404, "Seite existiert nicht")
-                    pg = pdf[page - 1]
-                    scale = width / pg.get_width()
-                    pg.render(scale=min(scale, 4.0)).to_pil().save(out, "PNG", optimize=True)
-                    pg.close()
-                finally:
-                    pdf.close()
+                tmp = out.with_suffix(f".{threading.get_ident()}.tmp")
+                with _RENDER_LOCK:
+                    pdf = pdfium.PdfDocument(str(local))
+                    try:
+                        if not 1 <= page <= len(pdf):
+                            raise HTTPException(404, "Seite existiert nicht")
+                        pg = pdf[page - 1]
+                        scale = width / pg.get_width()
+                        pil = pg.render(scale=min(scale, 4.0)).to_pil()
+                        pg.close()
+                    finally:
+                        pdf.close()
+                pil.save(tmp, "PNG", optimize=True)
+                tmp.replace(out)
             elif (d["mime_type"] or "").startswith("image/"):
                 if page != 1:
                     raise HTTPException(404, "Seite existiert nicht")
@@ -421,7 +437,12 @@ def register_routes(app: FastAPI) -> None:
         vis = visible_clause(user)
         return {
             "document_types": [r[0] for r in db.query(f"SELECT DISTINCT document_type FROM documents d WHERE {vis} AND document_type IS NOT NULL ORDER BY 1")],
-            "senders": [r[0] for r in db.query(f"SELECT DISTINCT sender FROM documents d WHERE {vis} AND sender IS NOT NULL ORDER BY 1 LIMIT 500")],
+            "senders": [r[0] for r in db.query(f"SELECT DISTINCT sender FROM documents d WHERE {vis} AND sender IS NOT NULL ORDER BY 1 COLLATE NOCASE LIMIT 500")],
+            "folders": [{"path": r["path"], "count": r["n"]} for r in db.query(
+                f"SELECT f.path, COUNT(*) n FROM documents d JOIN drive_folders f ON f.drive_id=d.target_folder_drive_id "
+                f"WHERE {vis} GROUP BY f.path ORDER BY f.path COLLATE NOCASE")],
+            "years": [r[0] for r in db.query(
+                f"SELECT DISTINCT substr(document_date,1,4) FROM documents d WHERE {vis} AND document_date IS NOT NULL ORDER BY 1 DESC")],
             "states": sorted(states.TRANSITIONS),
         }
 
