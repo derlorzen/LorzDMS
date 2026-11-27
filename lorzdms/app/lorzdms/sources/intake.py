@@ -133,7 +133,15 @@ def sync_gmail(source: dict) -> int:
         message_ids = list(client.search(query, label_ids, limit=int(cfg.get("backfill_limit", 200))))
     created = 0
     for mid in message_ids:
-        msg = client.message(mid)
+        try:
+            msg = client.message(mid)
+        except ghttp.GoogleApiError as exc:
+            # In der History gemeldete, inzwischen gelöschte Nachrichten (z. B. Entwürfe, Spam)
+            # überspringen, statt den ganzen Abgleich dauerhaft zu blockieren.
+            if exc.status == 404:
+                log.info("Gmail-Nachricht nicht mehr vorhanden – übersprungen")
+                continue
+            raise
         if label_ids and not set(label_ids) & set(msg.get("labelIds", [])):
             continue
         meta = message_meta(msg)

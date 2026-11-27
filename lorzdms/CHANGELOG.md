@@ -13,6 +13,11 @@
 - Fix: Seitenvorschauen werden nacheinander gerendert (pdfium ist nicht threadsicher; viele gleichzeitige Vorschauen konnten die Weboberfläche abstürzen lassen).
 - Beim Update werden künftige Fälligkeitsdaten und Fristen aus bereits analysierten Dokumenten einmalig übernommen; vergangene nicht.
 
+## 0.1.8 – 2026-11-27
+
+- Gmail: In der History gemeldete, inzwischen gelöschte Nachrichten (HTTP 404) werden übersprungen. Vorher blieb der
+  Gmail-Abgleich dauerhaft hängen, weil der Cursor nicht weiterrückte.
+
 ## 0.1.7 – 2026-11-27
 
 - Nativer OpenRouter-Provider für Perplexity Decider v1.3 (free): Ordnerklassifizierung, Dokumenttyp und Vertraulichkeit über Decisions; belegte Metadaten über Extractions.
