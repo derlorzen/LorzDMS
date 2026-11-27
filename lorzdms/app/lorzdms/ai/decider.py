@@ -232,9 +232,9 @@ def analyze(cfg: providers.ProviderConfig, text: str, folders: list[dict], hints
         raise providers.ProviderError("Decider: API-Key fehlt")
     if len(folders) > MAX_FOLDERS:
         raise providers.ProviderError(f"Decider: mehr als {MAX_FOLDERS} Zielordner; manuelle Prüfung erforderlich")
-    if len(text) > MAX_TEXT_CHARS:
-        raise providers.ProviderError("Decider: Dokument überschreitet das Textlimit; manuelle Prüfung erforderlich")
-    state = text
+    # Lange Dokumente: wie bei den übrigen Providern nur der Anfang (Kopf, Absender, Betreff, Beträge).
+    truncated = len(text) > MAX_TEXT_CHARS
+    state = text[:MAX_TEXT_CHARS]
     folder_ids = {f"folder_{i}": f["drive_id"] for i, f in enumerate(folders)}
     criteria = {f"folder_{i}": (str(f["path"]) + " – " + str(f.get("description") or ""))[:1000]
                 for i, f in enumerate(folders)}
@@ -266,7 +266,7 @@ def analyze(cfg: providers.ProviderConfig, text: str, folders: list[dict], hints
             sensitivity = "highly_sensitive"
         values, evidence = _extract(extracted["answers"], state)
         target, confidence, alternatives = None, 0.0, []
-        uncertainties = []
+        uncertainties = [f"Langes Dokument: nur die ersten {MAX_TEXT_CHARS:,} Zeichen analysiert".replace(",", ".")] if truncated else []
         if folders:
             winner, probs = _choice(answers, "folder", criteria)
             if winner != "no_match":

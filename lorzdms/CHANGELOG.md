@@ -9,6 +9,7 @@
 - Übersicht zeigt überfällige und anstehende Fristen.
 - **Tags automatisch**: Der Decider ordnet jedes Dokument einem Lebensbereich zu (z. B. Auto, Gesundheit, Wohnen, Steuern) und ergänzt das Steuerjahr. Ungültige KI- oder Regel-Tags werden verworfen statt gespeichert.
 - **Neue Dokumentübersicht**: Kacheln mit Vorschau der ersten Seite (umschaltbar auf Liste), Filter für Typ, Absender, Ordner inkl. Unterordnern, Jahr, Tag und Status, Sortierung nach Datum oder Absender.
+- Decider: Lange Dokumente werden auf die ersten 24.000 Zeichen gekürzt analysiert statt abgelehnt (wie bei den übrigen KI-Providern); das Dokument wird als „nur Anfang analysiert“ markiert.
 - Fix: Seitenvorschauen werden nacheinander gerendert (pdfium ist nicht threadsicher; viele gleichzeitige Vorschauen konnten die Weboberfläche abstürzen lassen).
 - Beim Update werden künftige Fälligkeitsdaten und Fristen aus bereits analysierten Dokumenten einmalig übernommen; vergangene nicht.
 
