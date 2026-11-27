@@ -35,6 +35,7 @@ def fake_handler(calls, *, abstain=False, invalid=False, highly_sensitive=False)
                 "document_type": choose(questions["document_type"], "invoice"),
                 "confidentiality": choose(questions["confidentiality"], "highly_sensitive" if highly_sensitive else "sensitive"),
                 "folder": choose(questions["folder"], "no_match" if abstain else "folder_0", .94),
+                "topic": choose(questions["topic"], "it", .6),
             }
             if invalid:
                 answers["folder"]["choice"] = "unapproved-folder"
@@ -68,6 +69,7 @@ def test_native_decider(settings, monkeypatch):
     assert call.result.amount == 1234.56
     assert call.result.currency == "EUR"
     assert call.result.contract_number is None
+    assert call.result.tags == ["IT & Telefon"]
     assert call.input_tokens == 200 and call.output_tokens == 0
 
 
@@ -102,3 +104,24 @@ def test_decider_rejects_wrong_endpoint(settings, monkeypatch):
     monkeypatch.setattr(ghttp, "_transport", httpx.MockTransport(lambda r: pytest.fail("Do not send credentials")))
     with pytest.raises(providers.ProviderError, match="nativen"):
         providers.analyze(cfg, TEXT, FOLDERS, {}, allow_external=True)
+
+
+def test_decider_truncates_long_documents(settings, monkeypatch):
+    from lorzdms.ai.prompt import MAX_TEXT_CHARS
+
+    seen = []
+
+    def handler(request):
+        body = json.loads(request.content)
+        seen.append(len(body["state"]))
+        if request.url.path.endswith("/decisions"):
+            q = body["questions"]
+            answers = {k: choose(v, "unknown" if k == "document_type" else "normal" if k == "confidentiality" else "none" if k == "topic" else "no_match") for k, v in q.items()}
+        else:
+            answers = {k: {"type": v["type"], "value": None} for k, v in body["fields"].items()}
+        return httpx.Response(200, json={"answers": answers})
+
+    monkeypatch.setattr(ghttp, "_transport", httpx.MockTransport(handler))
+    call = providers.analyze(CFG, "x" * (MAX_TEXT_CHARS + 5000), FOLDERS, {}, allow_external=True)
+    assert seen == [MAX_TEXT_CHARS, MAX_TEXT_CHARS]
+    assert any("nur die ersten" in u for u in call.result.uncertainties)

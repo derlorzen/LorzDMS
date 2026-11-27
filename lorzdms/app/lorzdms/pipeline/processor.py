@@ -22,7 +22,7 @@ import shutil
 from pathlib import Path
 from typing import Any
 
-from .. import appsettings, db, services
+from .. import appsettings, db, organize, services
 from ..ai import providers as ai_providers
 from ..config import get_settings
 from ..crypto import get_secret
@@ -312,7 +312,7 @@ def step_analyze(doc: dict) -> None:
     if doc["mime_type"] and doc["mime_type"].startswith("image/") and appsettings.get("original_strategy") != "original_only":
         ext = ".pdf"
     target_name = naming.render(template, meta, doc["original_filename"], ext or ".pdf")
-    tags = list(dict.fromkeys((doc["tags"] or []) + a.get("tags", []) + (ai_result.tags if ai_result else [])))
+    tags = organize.clean_tags((doc["tags"] or []) + a.get("tags", []) + (ai_result.tags if ai_result else []))
     decision.update({"folder_drive_id": folder, "confidence": confidence, "review_reasons": reasons, "template": template})
     visibility = a.get("visibility") or ("admins" if ai_result and ai_result.confidentiality == "highly_sensitive" else doc.get("visibility", "members"))
     update(
@@ -320,6 +320,14 @@ def step_analyze(doc: dict) -> None:
         target_name=target_name, document_type=meta.get("document_type"), sender=meta.get("sender"),
         document_date=meta.get("document_date"), title=meta.get("title") or doc.get("title"), visibility=visibility,
     )
+    try:
+        linked = organize.auto_link(doc, meta)
+        new_deadlines = organize.sync_from_analysis(doc, meta)
+    except Exception as exc:  # noqa: BLE001 - Organisation darf die Ablage nie blockieren
+        log.warning("Dokument %s: Fristen/Vorgänge nicht übernommen: %s", doc["id"], type(exc).__name__)
+    else:
+        if linked or new_deadlines:
+            journal(doc["id"], "organize", "ok", "Fristen und Vorgänge übernommen", cases=linked, deadlines=new_deadlines)
     set_state(doc, states.ANALYZED)
     journal(doc["id"], "analyze", "ok", "Entscheidung gespeichert", folder=folder, confidence=confidence,
             rules=[m["name"] for m in outcome.matched], reasons=reasons)

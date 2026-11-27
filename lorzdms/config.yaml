@@ -1,6 +1,6 @@
 # https://contributors.home-assistant.io/apps/reference/configuration/
 name: LorzDMS
-version: "0.1.8"
+version: "0.2.0"
 slug: lorzdms
 description: KI-gestütztes Dokumentenmanagement mit Google Drive als Archiv
 url: "https://github.com/derlorzen/LorzDMS/tree/main/lorzdms"
@@ -17,7 +17,7 @@ panel_icon: mdi:file-document-multiple-outline
 panel_title: LorzDMS
 panel_admin: true
 hassio_api: false
-homeassistant_api: false
+homeassistant_api: true  # Fristen-Erinnerungen als HA-Benachrichtigung
 map:
   - share:rw
 backup: hot

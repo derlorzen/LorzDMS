@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.2.0 – 2026-11-27
+
+- **Fristen und Erinnerungen**: Fälligkeitsdaten und erkannte Fristen (Zahlung, Kündigung, Widerspruch, Antwort, Termin, Wiedervorlage) werden bei der Analyse als Fristen übernommen; berechnete Fristen sind als „bitte prüfen“ markiert. Fristen lassen sich manuell anlegen, erledigen, verwerfen und verschieben. Verworfene Fristen tauchen bei erneuter Analyse nicht wieder auf.
+- Erinnerungen über Home Assistant (`persistent_notification.create` oder `notify.<dienst>`): eine am Vorlauftag (Standard 3 Tage), eine am Fälligkeitstag, frühestens ab einer einstellbaren Uhrzeit. Übertragen werden nur Titel und Datum der Frist. Dafür braucht die App jetzt die Berechtigung `homeassistant_api`.
+- **Vorgänge**: bündeln Dokumente und Fristen. Mit einer Referenz (Aktenzeichen, Vertrags-, Versicherungs- oder Kundennummer) werden neue Dokumente automatisch einem offenen Vorgang zugeordnet.
+- **Tags**: in der Dokumentansicht bearbeiten, Dokumente nach Tag filtern, Tags umbenennen, zusammenführen und entfernen.
+- Übersicht zeigt überfällige und anstehende Fristen.
+- **Tags automatisch**: Der Decider ordnet jedes Dokument einem Lebensbereich zu (z. B. Auto, Gesundheit, Wohnen, Steuern) und ergänzt das Steuerjahr. Ungültige KI- oder Regel-Tags werden verworfen statt gespeichert.
+- **Neue Dokumentübersicht**: Kacheln mit Vorschau der ersten Seite (umschaltbar auf Liste), Filter für Typ, Absender, Ordner inkl. Unterordnern, Jahr, Tag und Status, Sortierung nach Datum oder Absender.
+- Decider: Lange Dokumente werden auf die ersten 24.000 Zeichen gekürzt analysiert statt abgelehnt (wie bei den übrigen KI-Providern); das Dokument wird als „nur Anfang analysiert“ markiert.
+- Fix: Seitenvorschauen werden nacheinander gerendert (pdfium ist nicht threadsicher; viele gleichzeitige Vorschauen konnten die Weboberfläche abstürzen lassen).
+- Beim Update werden künftige Fälligkeitsdaten und Fristen aus bereits analysierten Dokumenten einmalig übernommen; vergangene nicht.
+
 ## 0.1.8 – 2026-11-27
 
 - Gmail: In der History gemeldete, inzwischen gelöschte Nachrichten (HTTP 404) werden übersprungen. Vorher blieb der

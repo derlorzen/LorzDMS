@@ -71,7 +71,48 @@ export type Doc = {
   visibility: string;
   operations?: { id: number; kind: string; status: string; new_name: string; created_at: string }[];
   has_local_file?: boolean;
+  cases?: CaseLink[];
+  deadlines?: Deadline[];
 };
+
+export type DeadlineKind = "payment" | "cancellation" | "objection" | "response" | "appointment" | "resubmission" | "other";
+export type Deadline = {
+  id: number;
+  document_id: number | null;
+  case_id: number | null;
+  title: string;
+  kind: DeadlineKind;
+  due_date: string;
+  status: "open" | "done" | "dismissed";
+  source: "manual" | "document";
+  explicit: number | null;
+  quote: string | null;
+  remind_days: number;
+  notified_stage: number;
+  days_left: number;
+  overdue: boolean;
+  document_title?: string | null;
+  document_filename?: string | null;
+  case_title?: string | null;
+};
+export type DeadlineSummary = { overdue: number; next_7_days: number; open: number; upcoming: Deadline[] };
+export type CaseLink = { id: number; title: string; status: string; reference: string | null; source: string };
+export type Case = {
+  id: number;
+  title: string;
+  description: string | null;
+  reference: string | null;
+  status: "open" | "closed";
+  created_at: string;
+  updated_at: string;
+  closed_at: string | null;
+  document_count: number;
+  open_deadlines: number;
+  next_due: string | null;
+  documents?: (Doc & { link_source: string })[];
+  deadlines?: Deadline[];
+};
+export type TagCount = { tag: string; count: number };
 
 export type Folder = { id: number; account_id: number; drive_id: string; name: string; path: string; role: string; description: string | null };
 export type Me = { id: number; name: string; role: "none" | "viewer" | "editor" | "admin" };

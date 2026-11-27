@@ -1,5 +1,6 @@
-import { Doc } from "../api";
-import { fmtDate, t } from "../i18n";
+import { DeadlineSummary, Doc } from "../api";
+import { fmtDate, fmtDay, t } from "../i18n";
+import { DueBadge } from "../components/Organize";
 import { ErrorBox, Notice, Section, Stat, StateBadge, useApi } from "../ui";
 
 type Dash = {
@@ -14,6 +15,8 @@ type Dash = {
   mode: string;
   ocr_available: boolean;
   ai_configured: boolean;
+  deadlines: DeadlineSummary;
+  open_cases: number;
 };
 
 const sum = (c: Record<string, number>, keys: string[]) => keys.reduce((a, k) => a + (c[k] ?? 0), 0);
@@ -49,8 +52,29 @@ export default function Dashboard({ go }: { go: (to: string) => void }) {
         <Stat label={t("duplicates")} value={sum(c, ["duplicate"])} onClick={() => go("documents")} />
         <Stat label={t("failed")} value={sum(c, ["failed", "quarantined"]) + (data.jobs.by_state.dead ?? 0)} tone="text-red-600" onClick={() => go("documents")} />
       </div>
-      <div className="grid gap-4 lg:grid-cols-3">
-        <div className="lg:col-span-2">
+      <div className="grid items-start gap-4 lg:grid-cols-3">
+        <div className="space-y-4 lg:col-span-2">
+          <Section title={t("deadlines")} actions={<button className="btn !py-0.5 text-xs" onClick={() => go("deadlines")}>Alle anzeigen</button>}>
+            <div className="mb-3 flex flex-wrap gap-4 text-sm">
+              <span><b className={data.deadlines.overdue ? "text-red-600" : ""}>{data.deadlines.overdue}</b> {t("overdue")}</span>
+              <span><b className={data.deadlines.next_7_days ? "text-amber-600" : ""}>{data.deadlines.next_7_days}</b> {t("next_7_days")}</span>
+              <span><b>{data.deadlines.open}</b> {t("open")}</span>
+              <a className="text-brand-600 underline" href="#/cases">{t("open_cases")}: {data.open_cases}</a>
+            </div>
+            {data.deadlines.upcoming.length === 0 ? (
+              <p className="text-sm muted">Keine offenen Fristen.</p>
+            ) : (
+              <ul className="space-y-1 text-sm">
+                {data.deadlines.upcoming.map((d) => (
+                  <li key={d.id} className="flex items-center gap-2">
+                    <span className="w-28 shrink-0 whitespace-nowrap">{fmtDay(d.due_date)}</span>
+                    <DueBadge d={d} />
+                    <a className="min-w-0 truncate hover:underline" href={d.document_id ? `#/documents/${d.document_id}` : d.case_id ? `#/cases/${d.case_id}` : "#/deadlines"}>{d.title}</a>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </Section>
           <Section title={t("recent")}>
             {data.recent.length === 0 ? (
               <p className="text-sm muted">{t("empty")}</p>

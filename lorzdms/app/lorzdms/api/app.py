@@ -11,6 +11,7 @@ import json
 import logging
 import re
 import shutil
+import threading
 from pathlib import Path
 from typing import Any
 
@@ -18,7 +19,7 @@ from fastapi import Body, Depends, FastAPI, File, Form, HTTPException, Query, Re
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse, Response
 from pydantic import BaseModel, Field
 
-from .. import __version__, actions, appsettings, bootstrap, crypto, db, jobqueue, services
+from .. import __version__, actions, appsettings, bootstrap, crypto, db, jobqueue, notify, organize, services
 from ..ai import providers as ai_providers, decider
 from ..config import get_settings
 from ..google import http as ghttp
@@ -28,10 +29,13 @@ from ..pipeline import naming, rules, states, nvidia_ocr
 from ..pipeline.processor import load
 from ..pipeline.text import ocr_available
 from ..sources import intake
+from . import organize_routes
 from .deps import User, current_user, require, visible_clause
 
 log = logging.getLogger("lorzdms.api")
 STATIC_DIR = Path(__file__).resolve().parent.parent / "static"
+# pdfium ist nicht threadsicher; die Vorschau-Endpunkte laufen im Threadpool (viele Kacheln gleichzeitig).
+_RENDER_LOCK = threading.Lock()
 
 
 def create_app(init: bool = True) -> FastAPI:
@@ -210,6 +214,8 @@ def register_routes(app: FastAPI) -> None:
             "mode": appsettings.get("processing_mode"),
             "ocr_available": ocr_available(),
             "ai_configured": bool((appsettings.get("ai_provider") or {}).get("kind") not in (None, "none")),
+            "deadlines": organize_routes.deadline_summary(user),
+            "open_cases": db.one("SELECT COUNT(*) n FROM cases WHERE status='open'")["n"],
         }
 
     # Dokumente -----------------------------------------------------------------
@@ -222,6 +228,10 @@ def register_routes(app: FastAPI) -> None:
         sender: str | None = None,
         date_from: str | None = None,
         date_to: str | None = None,
+        tag: str | None = Query(default=None, max_length=40),
+        case_id: int | None = None,
+        folder: str | None = Query(default=None, max_length=500),
+        sort: str = Query(default="newest", pattern="^(newest|date_desc|date_asc|sender)$"),
         limit: int = Query(default=50, ge=1, le=200),
         offset: int = Query(default=0, ge=0),
     ):
@@ -242,8 +252,21 @@ def register_routes(app: FastAPI) -> None:
         if date_to:
             where.append("d.document_date <= ?")
             params.append(date_to)
+        if tag:
+            where.append("EXISTS (SELECT 1 FROM json_each(CASE WHEN json_valid(d.tags) THEN d.tags ELSE '[]' END) WHERE value = ?)")
+            params.append(tag)
+        if case_id is not None:
+            where.append("EXISTS (SELECT 1 FROM document_cases dc WHERE dc.document_id=d.id AND dc.case_id=?)")
+            params.append(case_id)
+        if folder:
+            # Ordner inklusive Unterordnern (Pfad aus der Ordnerliste)
+            where.append("d.target_folder_drive_id IN (SELECT drive_id FROM drive_folders WHERE path = ? OR path LIKE ? ESCAPE '\\')")
+            esc = folder.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+            params += [folder, f"{esc}/%"]
         join = ""
-        order = "d.id DESC"
+        order = {"newest": "d.id DESC", "date_desc": "COALESCE(d.document_date, substr(d.created_at,1,10)) DESC, d.id DESC",
+                 "date_asc": "COALESCE(d.document_date, substr(d.created_at,1,10)) ASC, d.id ASC",
+                 "sender": "d.sender IS NULL, d.sender COLLATE NOCASE, d.id DESC"}[sort]
         if q and fts_query(q):
             join = "JOIN documents_fts f ON f.rowid=d.id"
             where.append("documents_fts MATCH ?")
@@ -264,6 +287,8 @@ def register_routes(app: FastAPI) -> None:
         d["has_local_file"] = (get_settings().temp_dir / f"doc-{doc_id}" / "original").exists()
         if d.get("duplicate_of"):
             d["duplicate"] = doc_out(db.one("SELECT * FROM documents WHERE id=?", (d["duplicate_of"],)))
+        d["cases"] = organize.cases_for_document(doc_id)
+        d["deadlines"] = organize_routes.deadlines_for_document(doc_id)
         return d
 
     @app.get("/api/documents/{doc_id}/text")
@@ -328,16 +353,20 @@ def register_routes(app: FastAPI) -> None:
             if d["mime_type"] == "application/pdf":
                 import pypdfium2 as pdfium
 
-                pdf = pdfium.PdfDocument(str(local))
-                try:
-                    if not 1 <= page <= len(pdf):
-                        raise HTTPException(404, "Seite existiert nicht")
-                    pg = pdf[page - 1]
-                    scale = width / pg.get_width()
-                    pg.render(scale=min(scale, 4.0)).to_pil().save(out, "PNG", optimize=True)
-                    pg.close()
-                finally:
-                    pdf.close()
+                tmp = out.with_suffix(f".{threading.get_ident()}.tmp")
+                with _RENDER_LOCK:
+                    pdf = pdfium.PdfDocument(str(local))
+                    try:
+                        if not 1 <= page <= len(pdf):
+                            raise HTTPException(404, "Seite existiert nicht")
+                        pg = pdf[page - 1]
+                        scale = width / pg.get_width()
+                        pil = pg.render(scale=min(scale, 4.0)).to_pil()
+                        pg.close()
+                    finally:
+                        pdf.close()
+                pil.save(tmp, "PNG", optimize=True)
+                tmp.replace(out)
             elif (d["mime_type"] or "").startswith("image/"):
                 if page != 1:
                     raise HTTPException(404, "Seite existiert nicht")
@@ -408,7 +437,12 @@ def register_routes(app: FastAPI) -> None:
         vis = visible_clause(user)
         return {
             "document_types": [r[0] for r in db.query(f"SELECT DISTINCT document_type FROM documents d WHERE {vis} AND document_type IS NOT NULL ORDER BY 1")],
-            "senders": [r[0] for r in db.query(f"SELECT DISTINCT sender FROM documents d WHERE {vis} AND sender IS NOT NULL ORDER BY 1 LIMIT 500")],
+            "senders": [r[0] for r in db.query(f"SELECT DISTINCT sender FROM documents d WHERE {vis} AND sender IS NOT NULL ORDER BY 1 COLLATE NOCASE LIMIT 500")],
+            "folders": [{"path": r["path"], "count": r["n"]} for r in db.query(
+                f"SELECT f.path, COUNT(*) n FROM documents d JOIN drive_folders f ON f.drive_id=d.target_folder_drive_id "
+                f"WHERE {vis} GROUP BY f.path ORDER BY f.path COLLATE NOCASE")],
+            "years": [r[0] for r in db.query(
+                f"SELECT DISTINCT substr(document_date,1,4) FROM documents d WHERE {vis} AND document_date IS NOT NULL ORDER BY 1 DESC")],
             "states": sorted(states.TRANSITIONS),
         }
 
@@ -658,7 +692,8 @@ def register_routes(app: FastAPI) -> None:
     @app.patch("/api/settings")
     def patch_settings(values: dict = Body(...), user: User = Depends(admin)):
         allowed = {"processing_mode", "auto_threshold", "suggest_threshold", "ai_confidence_cap", "allow_external_ai",
-                   "filename_template", "original_strategy", "review_sensitive"}
+                   "filename_template", "original_strategy", "review_sensitive",
+                   "reminders_enabled", "reminder_days_default", "reminder_hour", "notify_service"}
         for k, v in values.items():
             if k not in allowed:
                 raise HTTPException(400, f"Einstellung '{k}' ist nicht änderbar")
@@ -671,6 +706,17 @@ def register_routes(app: FastAPI) -> None:
                 raise HTTPException(400, "; ".join(naming.validate_template(v)))
             if k in ("auto_threshold", "suggest_threshold", "ai_confidence_cap") and not (0 <= float(v) <= 1):
                 raise HTTPException(400, f"{k} muss zwischen 0 und 1 liegen")
+            if k == "reminder_days_default" and not (isinstance(v, int) and 0 <= v <= 365):
+                raise HTTPException(400, "Vorlauf muss 0–365 Tage betragen")
+            if k == "reminder_hour" and not (isinstance(v, int) and 0 <= v <= 23):
+                raise HTTPException(400, "Uhrzeit muss 0–23 sein")
+            if k == "notify_service":
+                try:
+                    notify.validate_service(v)
+                except ValueError as exc:
+                    raise HTTPException(400, str(exc)) from exc
+            if k == "reminders_enabled" and not isinstance(v, bool):
+                raise HTTPException(400, "reminders_enabled muss true/false sein")
             if k == "original_strategy" and v not in ("original_only", "original_plus_derivative", "derivative_only"):
                 raise HTTPException(400, "Ungültige Strategie")
             appsettings.set(k, v)
@@ -799,6 +845,8 @@ def register_routes(app: FastAPI) -> None:
         appsettings.set("setup_completed", True)
         db.audit("setup.completed", user.id)
         return {"ok": True}
+
+    organize_routes.register(app)
 
     # Oberfläche ----------------------------------------------------------------
     @app.get("/", include_in_schema=False)

@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { api, Doc, Folder, Me } from "../api";
 import { fmtDate, t } from "../i18n";
 import { ErrorBox, Field, Notice, StateBadge, useAction, useApi } from "../ui";
+import { CaseAssign, DeadlineForm, DeadlineTable, TagEditor } from "./Organize";
 
 type Journal = { id: number; ts: string; step: string; status: string; message: string; data: Record<string, unknown> | null };
 
@@ -126,6 +127,21 @@ export default function DocDetail({ id, me, onDone }: { id: number; me: Me; onDo
             {dec.ai?.uncertainties?.map((r, i) => <div key={`u${i}`} className="muted">? {r}</div>)}
           </div>
         ) : null}
+        <div className="panel space-y-2 p-4">
+          <div className="h2">{t("deadlines")}</div>
+          <DeadlineTable items={d.deadlines ?? []} canEdit={canEdit} onChange={doc.reload} showDoc={false} compact />
+          {canEdit && <DeadlineForm documentId={id} onSaved={doc.reload} compact />}
+        </div>
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-1 2xl:grid-cols-2">
+          <div className="panel space-y-2 p-4">
+            <div className="h2">{t("cases")}</div>
+            <CaseAssign docId={id} cases={d.cases ?? []} canEdit={canEdit} onChange={doc.reload} />
+          </div>
+          <div className="panel space-y-2 p-4">
+            <div className="h2">{t("tags")}</div>
+            <TagEditor docId={id} tags={d.tags ?? []} canEdit={canEdit} onSaved={(tags) => doc.setData({ ...d, tags })} />
+          </div>
+        </div>
         <div className="panel space-y-3 p-4">
           <div className="h2">{t("metadata")}</div>
           <Field label={t("folder")}>

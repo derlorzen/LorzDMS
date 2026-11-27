@@ -32,6 +32,28 @@ TYPES = {
     "certificate": "Bescheinigung", "letter": "Schreiben",
     "unknown": "Sonstiges oder nicht bestimmbar",
 }
+# Themen-Tags: feste Liste, damit Tags einheitlich bleiben und filterbar sind.
+TOPICS = {
+    "auto": "Auto, Kfz, Fahrzeug, Werkstatt, Tanken, Kfz-Versicherung",
+    "wohnen": "Wohnen, Miete, Nebenkosten, Strom, Gas, Wasser, Handwerker, Immobilie",
+    "gesundheit": "Gesundheit, Arzt, Krankenhaus, Krankenkasse, Pflege, Apotheke",
+    "versicherung": "Versicherungen (außer Kfz- und Krankenversicherung)",
+    "steuern": "Steuern, Finanzamt, Steuerbescheid, Steuererklärung",
+    "finanzen": "Bank, Kredit, Geldanlage, Altersvorsorge, Rente",
+    "arbeit": "Arbeit, Gehalt, Arbeitgeber, Bewerbung, Weiterbildung",
+    "familie": "Kinder, Kita, Schule, Kindergeld, Familie",
+    "verein": "Verein, Ehrenamt, Mitgliedschaft, Sport",
+    "behoerde": "Behörden, Ämter, Ausweise, Meldewesen, Rundfunkbeitrag",
+    "einkauf": "Einkäufe, Bestellungen, Garantie, Gewährleistung",
+    "it": "Internet, Telefon, Mobilfunk, Software, Hosting, Abos digitaler Dienste",
+    "reise": "Reisen, Urlaub, Bahn, Flug, Hotel",
+    "none": "Keines der Themen passt eindeutig",
+}
+TOPIC_TAGS = {
+    "auto": "Auto", "wohnen": "Wohnen", "gesundheit": "Gesundheit", "versicherung": "Versicherung",
+    "steuern": "Steuern", "finanzen": "Finanzen", "arbeit": "Arbeit", "familie": "Familie", "verein": "Verein",
+    "behoerde": "Behörde", "einkauf": "Einkauf", "it": "IT & Telefon", "reise": "Reise",
+}
 SENSITIVITY = {
     "normal": "Allgemeine, nicht vertrauliche Unterlagen",
     "sensitive": "Personenbezogene, finanzielle oder geschäftlich vertrauliche Daten",
@@ -165,6 +187,21 @@ def _extract(answers: dict, state: str) -> tuple[dict, list[dict]]:
     return values, evidence[:30]
 
 
+def _tags(answers: dict, values: dict) -> list[str]:
+    """Tags aus Themen-Entscheidung (bis zu zwei, ab 35 %) und Steuerjahr. Ein fehlendes oder
+    ungültiges Thema verhindert nie die eigentliche Analyse."""
+    tags: list[str] = []
+    try:
+        _, probs = _choice(answers, "topic", TOPICS)
+    except (KeyError, ValueError, TypeError):
+        probs = {}
+    for key in sorted((k for k in probs if k != "none" and probs[k] >= .35), key=probs.get, reverse=True)[:2]:
+        tags.append(TOPIC_TAGS[key])
+    if values.get("tax_year"):
+        tags.append(f"Steuerjahr {values['tax_year']}")
+    return tags
+
+
 def _post(client: httpx.Client, route: str, body: dict) -> dict:
     try:
         response = client.post(f"{BASE_URL}/{route}", json=body)
@@ -195,9 +232,9 @@ def analyze(cfg: providers.ProviderConfig, text: str, folders: list[dict], hints
         raise providers.ProviderError("Decider: API-Key fehlt")
     if len(folders) > MAX_FOLDERS:
         raise providers.ProviderError(f"Decider: mehr als {MAX_FOLDERS} Zielordner; manuelle Prüfung erforderlich")
-    if len(text) > MAX_TEXT_CHARS:
-        raise providers.ProviderError("Decider: Dokument überschreitet das Textlimit; manuelle Prüfung erforderlich")
-    state = text
+    # Lange Dokumente: wie bei den übrigen Providern nur der Anfang (Kopf, Absender, Betreff, Beträge).
+    truncated = len(text) > MAX_TEXT_CHARS
+    state = text[:MAX_TEXT_CHARS]
     folder_ids = {f"folder_{i}": f["drive_id"] for i, f in enumerate(folders)}
     criteria = {f"folder_{i}": (str(f["path"]) + " – " + str(f.get("description") or ""))[:1000]
                 for i, f in enumerate(folders)}
@@ -205,6 +242,7 @@ def analyze(cfg: providers.ProviderConfig, text: str, folders: list[dict], hints
     questions = {
         "document_type": {"type": "choice", "instructions": UNTRUSTED + "Welcher Dokumenttyp trifft am besten zu?", "criteria": TYPES},
         "confidentiality": {"type": "choice", "instructions": UNTRUSTED + "Wie vertraulich ist der Inhalt?", "criteria": SENSITIVITY},
+        "topic": {"type": "choice", "instructions": UNTRUSTED + "Zu welchem Lebensbereich gehört das Dokument?", "criteria": TOPICS},
     }
     if folders:
         questions["folder"] = {"type": "choice",
@@ -228,7 +266,7 @@ def analyze(cfg: providers.ProviderConfig, text: str, folders: list[dict], hints
             sensitivity = "highly_sensitive"
         values, evidence = _extract(extracted["answers"], state)
         target, confidence, alternatives = None, 0.0, []
-        uncertainties = []
+        uncertainties = [f"Langes Dokument: nur die ersten {MAX_TEXT_CHARS:,} Zeichen analysiert".replace(",", ".")] if truncated else []
         if folders:
             winner, probs = _choice(answers, "folder", criteria)
             if winner != "no_match":
@@ -240,6 +278,7 @@ def analyze(cfg: providers.ProviderConfig, text: str, folders: list[dict], hints
                             if folder_ids[k] != target and probs[k] > 0][:5]
         if doc_type != "unknown" and type_probs[doc_type] >= .5:
             values["document_type"] = TYPES[doc_type]
+        values["tags"] = _tags(answers, values)
         result = AnalysisResult(**values, evidence=evidence, confidentiality=sensitivity,
                                 suggested_folder_id=target, alternative_folder_ids=alternatives,
                                 confidence=confidence, uncertainties=uncertainties,

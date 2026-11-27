@@ -10,7 +10,7 @@ import threading
 import time
 from datetime import datetime, timedelta, timezone
 
-from . import appsettings, bootstrap, db, jobqueue
+from . import appsettings, bootstrap, db, jobqueue, notify, organize
 from .config import get_settings
 from .google import http as ghttp
 from .pipeline import processor
@@ -31,6 +31,10 @@ def handle(job: dict) -> None:
         log.info("Quelle %s: %d neue Dokumente", payload["source_id"], n)
     elif kind == "scan_local_inbox":
         intake.scan_local_inbox()
+    elif kind == "deadline_reminders":
+        n = organize.run_reminders(notify.send)
+        db.set_setting("reminders_last_run", {"at": db.utcnow(), "sent": n, "status": "ok"})
+        log.info("Fristen-Erinnerungen: %d gesendet", n)
     elif kind == "maintenance":
         jobqueue.purge_finished()
     else:
@@ -83,6 +87,24 @@ def schedule_due() -> None:
                 jobqueue.enqueue("sync_source", {"source_id": src["id"]}, priority=80, dedupe_key=f"sync:{src['id']}")
 
 
+def schedule_reminders(now: datetime | None = None) -> bool:
+    """Reiht höchstens alle 30 Minuten die Fristenprüfung ein (ab ``reminder_hour`` Ortszeit)."""
+    if not appsettings.get("reminders_enabled"):
+        return False
+    local = (now or datetime.now(timezone.utc)).astimezone()
+    if local.hour < int(appsettings.get("reminder_hour") or 0):
+        return False
+    if not notify.available():
+        db.set_setting("reminders_last_run", {"at": db.utcnow(), "sent": 0, "status": "unavailable"})
+        return False
+    last = db.get_setting("reminders_scheduled_at")
+    if last and local - datetime.fromisoformat(last) < timedelta(minutes=30):
+        return False
+    db.set_setting("reminders_scheduled_at", local.isoformat())
+    jobqueue.enqueue("deadline_reminders", {}, priority=70, dedupe_key="deadline_reminders")
+    return True
+
+
 def main() -> None:
     bootstrap.init(role="worker")
     worker_id = f"{socket.gethostname()}:{os.getpid()}"
@@ -98,6 +120,7 @@ def main() -> None:
         if time.monotonic() - last_schedule > 15:
             try:
                 schedule_due()
+                schedule_reminders()
                 jobqueue.recover_expired()
                 db.set_setting("worker_heartbeat", db.utcnow())
             except Exception:  # noqa: BLE001
